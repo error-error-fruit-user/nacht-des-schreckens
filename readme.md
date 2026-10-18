@@ -8,6 +8,8 @@ license:
 
 # Nacht des Schreckens
 
+> **AI notice:** this project is developed with the help of AI. The history up to July 2025 was written by hand; since October 2026, much of the code and documentation is written with [Claude](https://claude.ai) (Anthropic), working under my direction and review. Commits that Claude helped write carry a `Co-Authored-By: Claude` trailer, so you can see which ones in the history.
+
 ![demo of the map](demo.png)
 
 Consider this a custom zombies map for 'Call of Duty: World at War' but in the vein of a Doom 2 mod using the GZDoom source port. This map pulls or modifies many assets from 'World at War'. Most likely, after the final release of the demo, further updates will have to be retrieved elsewhere and a valid copy of 'Call of Duty: World at War' will also be required to use this mod.
