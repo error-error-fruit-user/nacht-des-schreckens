@@ -1,0 +1,42 @@
+clearSkills
+clearEpisodes
+
+episode "map01" {}
+
+map map01 "Nacht des Schreckens" {
+    sky1 = "sky1"
+    skyfog = 225
+    outsidefog = 301010
+    outsidefogdensity = 125
+}
+
+skill Normal {
+    key = 1
+    spawnFilter = normal
+    defaultSkill
+}
+
+// Horde Hammer adds its own event handlers and editor numbers (27000-27099)
+GameInfo {
+    PlayerClasses = "Nacht_Player", "DoomPlayer"
+    StatusBarClass = "HH_Hud"
+    AddEventHandlers = "Nacht_IntroHandler"
+}
+
+DoomEdNums {
+    1005 = "Nacht_Barrel"
+    1007 = "Nacht_HelpDoor"
+    1009 = "Nacht_QuickReviveMachine"
+    1010 = "Nacht_JuggernogMachine"
+    1011 = "Nacht_SpeedColaMachine"
+    1012 = "Nacht_DoubleTapMachine"
+    1013 = "Nacht_Debris"
+    1014 = "Nacht_SwayTarget"
+    1015 = "Nacht_Zombie"
+    1016 = "Nacht_Plane"
+
+    1050 = "Nacht_Kar98Drawing"
+    1051 = "Nacht_CarbineDrawing"
+    1052 = "Nacht_ThompsonDrawing"
+    1053 = "Nacht_M1GarandDrawing"
+}

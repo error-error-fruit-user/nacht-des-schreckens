@@ -1,0 +1,7 @@
+[enu default]
+
+NACHT_INTRO_TOP = "Doomed";
+NACHT_INTRO_BOTTOM = "Zombies";
+NACHT_MENU_ZOMBIES = "Zombies";
+NACHT_MENU_ZOMBIES_NACHT = "Nacht's zombies";
+NACHT_MENU_ZOMBIES_ROGUES = "Rogues gallery";

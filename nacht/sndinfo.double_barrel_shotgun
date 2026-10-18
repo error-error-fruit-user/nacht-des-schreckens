@@ -1,0 +1,4 @@
+// Double-Barreled Shotgun
+weapons/shotgun_fire sounds/weapons/double_barrel_shotgun/shotgun_fire.wav
+weapons/shotgun_push sounds/weapons/double_barrel_shotgun/shotgun_push.wav
+weapons/shotgun_pull sounds/weapons/double_barrel_shotgun/shotgun_pull.wav

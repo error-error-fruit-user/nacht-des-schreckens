@@ -34,7 +34,9 @@ This mod is meant to bring the features and spirit of classic 'Call of Duty Zomb
 
 - **Boondorl's Weather Library** https://github.com/Boondorl/Weather
 
-- **[unknown]'s NTM Quick Kick** (could not find the exact link to the mod, so here's the inspirations/adaptations):
+- **Horde Hammer** https://github.com/error-error-fruit-user/horde-hammer: the zombies mode itself (rounds, points, doors, the box, perks, drops, last stand, the HUD), which nacht's code became
+
+- **[unknown]'s NTM Quick Kick** (removed: the kick is Horde Hammer's own now):
 
     - https://github.com/LocalInsomniac/NTMAi/blob/master/zscript/weapons/kick.txt
 
@@ -52,21 +54,21 @@ This mod is meant to bring the features and spirit of classic 'Call of Duty Zomb
 
 ## Installation & Configuration
 
-Download the zip file from the 'Code' dropdown menu and unzip in directory of your choosing
+Nacht des Schreckens runs on [UZDoom](https://github.com/UZDoom/UZDoom) 5 or newer (GZDoom can't run it any more), and needs [Horde Hammer](https://github.com/error-error-fruit-user/horde-hammer), loaded before it:
 
-Download and unzip GZDoom next to this projects's folder: https://zdoom.org/downloads
+```
+uzdoom -iwad doom2.wad -file horde-hammer.pk3 nacht.pk3
+```
 
-Rename folder to just 'gzdoom'
+`python3 publish.py` here (and in Horde Hammer) makes the pk3s in `published/`. Without Horde Hammer, UZDoom stops at startup with "Unknown class HH_...".
 
 Extract the 'doom2.wad' file from a legal copy of Doom 2 OR extract the 'freedoom2.wad' file from the Freedoom project: https://freedoom.github.io/download.html
 
-Place the extracted file into the 'gzdoom' folder.
-
-To run using the 'launch.bat', 'host.bat', or 'join.bat' files, make sure the folder containing 'gzdoom.exe' is named 'gzdoom' and is next to the folder containing this project.
+The 'run-linux' and 'run-windows' scripts still expect the old GZDoom setup and are being updated.
 
 To avoid weapon sprite cropping, make sure the aspect ratio is set to 4:3 in-game (weapon sprites will be widened later to support wider ratios).
 
-To play using the original rogues gallery of enemies, set the 'Use Varied Zombies' option to true in the full options menu.
+To play against the original rogues gallery of enemies, set 'Zombies' to 'Rogues gallery' in the full options menu. Horde Hammer's own options (toggled zoom, where each part of the HUD goes) are under 'Horde Hammer Options'.
 
 ## Default Controls
 
@@ -81,7 +83,7 @@ To play using the original rogues gallery of enemies, set the 'Use Varied Zombie
 |Swap Weapon|Mouse Wheel|Y Button|
 |Quick Swap|1-9 Keys|D-Pad (Clockwise starting from left)|
 |Drop Weapon|C Key x2|Right Bumper x2|
-|Repulse/Skip Intro|Q Key|Left Bumbper|
+|Repulse/Skip Intro|Q Key|Left Bumper|
 
 ## Multiplayer
 

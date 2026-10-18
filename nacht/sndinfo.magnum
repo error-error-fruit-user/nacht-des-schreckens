@@ -1,0 +1,6 @@
+// .357 Magnum
+weapons/magnum_fire sounds/weapons/magnum/wpn_357_st_shot.wav
+weapons/magnum_open sounds/weapons/magnum/gr_357_open.wav
+weapons/magnum_empty sounds/weapons/magnum/gr_357_empty.wav
+weapons/magnum_load sounds/weapons/magnum/gr_357_load.wav
+weapons/magnum_close sounds/weapons/magnum/gr_357_close.wav
