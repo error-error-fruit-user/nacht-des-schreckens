@@ -64,7 +64,7 @@ Host or join with tdl: the host serves the profile's files, and joiners download
 - **[Freedoom](https://freedoom.github.io/)**: the free IWAD the mod also runs on, in place of Doom 2.
 - **Treyarch's [Call of Duty: World at War](https://store.steampowered.com/app/10090/Call_of_Duty_World_at_War/)**: the map remade, and the source of most of nacht's art:
     - The weapons' first-person and pickup sprites, converted from World at War to Doom's sprite style: the M1911, .357 Magnum, M1 Garand, M1 Carbine, Kar98k, Thompson, PPSh-41, Type 100, double-barreled shotgun and Ray Gun.
-    - The perks' bottles, their HUD icons and the four drinking animations, cropped frame by frame from the game.
+    - The perks' bottles and the four drinking animations, cropped frame by frame from the game.
     - Every weapon's firing and reload sounds, taken straight from the game (many still carry its own names, like `wpn_ppsh_st_f` and `gr_357_open`).
     - The perk drinking sounds: swallowing and the bottle breaking.
 
@@ -73,6 +73,7 @@ Host or join with tdl: the host serves the profile's files, and joiners download
 - **ZDL's [COD Zombies](https://www.moddb.com/mods/call-of-duty-nazi-zombies)** (the ZDL Edition of Call of Duty: Zombies for Doom 2), where nacht started out:
     - The zombie: every frame of its walking, attacking and dying sprites (`NAZO`).
     - The Insta-Kill, Max Ammo and Nuke power-up sprites, and the Ray Gun's projectile and its explosion.
+    - The Insta-Kill and Double Points HUD icons.
     - The rest of the sounds, which were most likely pulled from World at War in the first place:
         - The zombie's moans, sprinting, injured, headshot and attack sounds, and its fall when it dies.
         - The announcer and jingles: the game start, round change, siren, purchase and mystery box sounds, the Nuke, Double Points, Insta-Kill, Max Ammo and Fire Sale pickups, the power-up grab, and the power-ups fading.
@@ -83,6 +84,7 @@ Host or join with tdl: the host serves the profile's files, and joiners download
 ### Made for nacht
 
 - The mystery box, the doors and the Juggernog, Quick Revive, Speed Cola and Double Tap machines, drawn by Alexis Dutcher.
+- The Fire Sale and perk HUD icons, drawn by Tyler Wojciechowski with ZDL's power-up icons as a template.
 - The crashed plane, drawn by `tools/plane.py`.
 - The chalk wall buys: the Kar98k's, M1 Carbine's and Thompson's by hand, the rest traced from the weapons' pickup sprites by `tools/chalk.py`.
 
