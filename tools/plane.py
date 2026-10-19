@@ -6,7 +6,8 @@ usage: python3 tools/plane.py
 Dependency-free Python 3.8+. A wrecked olive drab transport seen from the side, broken in two:
 the nose ploughed into the ground, the tail propped up on the break, the far wing snapped off and
 sticking up behind it, an engine with a bent propeller, holes, scorch marks and scrap around it.
-300x150 standing on its bottom center, so Nacht_Plane's fires (scripts/nacht/plane.zs) land on it.
+300x150 standing on its bottom center; the scorch marks are where Nacht_Plane's fires burn (FIRE_X and
+FIRE_HEIGHT in scripts/nacht/plane.zs), so move them together.
 Reproducible: the weathering comes from the pixel positions, not a random seed.
 """
 
