@@ -11,7 +11,7 @@ Dependency-free Python 3.8+. The pk3 is reproducible: files go in sorted order w
 timestamp, so the same folder always packs to the same bytes (and tdl hashes it the same).
 Editor leftovers (Ultimate Doom Builder's .dbs and .backup files, OS junk) are left out.
 
-It also warns about things GZDoom/UZDoom get wrong silently:
+It also warns about things UZDoom gets wrong silently:
   - two paths that differ only in case (lookups in a pk3 ignore case, so one hides the other)
   - lumps in a namespace folder (sprites/, graphics/, ...) whose name is longer than 8 characters
     before the extension, which the engine truncates into lump names that can collide (sounds and
