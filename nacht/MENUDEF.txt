@@ -1,10 +1,10 @@
 // Nacht's own option; everything else is in Horde Hammer's options
 
-OptionString "Nacht_Zombies" {
-    "", "$NACHT_MENU_ZOMBIES_NACHT"
-    "HH_VariedZombie", "$NACHT_MENU_ZOMBIES_ROGUES"
+OptionValue "Nacht_Zombies" {
+    0, "$NACHT_MENU_ZOMBIES_NACHT"
+    1, "$NACHT_MENU_ZOMBIES_ROGUES"
 }
 
 AddOptionMenu "OptionsMenu" {
-    Option "$NACHT_MENU_ZOMBIES", "hh_zombie_class", "Nacht_Zombies"
+    Option "$NACHT_MENU_ZOMBIES", "nacht_rogues_gallery", "Nacht_Zombies"
 }

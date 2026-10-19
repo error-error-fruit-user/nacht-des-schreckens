@@ -1,0 +1,3 @@
+// Nacht's own settings (Horde Hammer's are in its CVARINFO)
+
+server bool nacht_rogues_gallery = false;   // Doom's monsters instead of nacht's zombies (from the next map start)
