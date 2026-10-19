@@ -62,25 +62,27 @@ Host or join with tdl: the host serves the profile's files, and joiners download
 
 - **id Software's [Doom + Doom II](https://store.steampowered.com/app/2280/DOOM__DOOM_II/)**: the IWAD the mod runs on. Nacht ships no textures of its own, so every wall, floor and ceiling on the map is a Doom 2 texture (`GRAY5`, `ROCK3`, `RROCK03`, `BROWNHUG`, `FLAT5_4`, `FLAT1`, ...), and so is the sky. The fires on the crashed plane loop the Arch-vile's flame frames (`FIRE`). The Doom marine player class keeps Doom's weapons, and the 'Rogues gallery' option sends Doom's monsters instead of the zombies.
 - **[Freedoom](https://freedoom.github.io/)**: the free IWAD the mod also runs on, in place of Doom 2.
-- **Treyarch's [Call of Duty: World at War](https://store.steampowered.com/app/10090/Call_of_Duty_World_at_War/)**: the map remade, and the source of most of nacht's art and sound:
-    - The weapons' first-person sprites and pickups: the M1911, .357 Magnum, M1 Garand, M1 Carbine, Kar98k, Thompson, PPSh-41, Type 100, double-barreled shotgun and Ray Gun.
-    - The weapons' firing and reload sounds, taken from the game under its own names (`wpn_ppsh_st_f`, `gr_357_open`, `gr_kar98_bolt_back`, ...): the M1 Garand, M1 Carbine, Kar98k, Thompson, PPSh-41, Type 100, .357 Magnum and double-barreled shotgun.
-    - The perks: the Juggernog, Quick Revive, Speed Cola and Double Tap machines, their bottles, their HUD icons and the four drinking animations, cropped frame by frame from the game.
-    - The intro music, the game over music, and the drinking, swallowing, bottle breaking and Fire Sale sounds.
+- **Treyarch's [Call of Duty: World at War](https://store.steampowered.com/app/10090/Call_of_Duty_World_at_War/)**: the map remade, and the source of most of nacht's art:
+    - The weapons' first-person and pickup sprites, converted from World at War to Doom's sprite style: the M1911, .357 Magnum, M1 Garand, M1 Carbine, Kar98k, Thompson, PPSh-41, Type 100, double-barreled shotgun and Ray Gun.
+    - The perks' bottles, their HUD icons and the four drinking animations, cropped frame by frame from the game.
+    - Most of the sounds, by way of ZDL's mod (below).
 
 ### Other mods and libraries
 
 - **ZDL's [COD Zombies](https://www.moddb.com/mods/call-of-duty-nazi-zombies)** (the ZDL Edition of Call of Duty: Zombies for Doom 2), where nacht started out:
     - The zombie: every frame of its walking, attacking and dying sprites (`NAZO`).
-    - The zombie's sounds: its moans, sprinting, injured, headshot and attack sounds, and its fall when it dies.
-    - The announcer and jingles: the game start, round change, siren, purchase and mystery box sounds, and the Nuke, Double Points and Insta-Kill pickups and their fading.
-    - The M1911's and Ray Gun's firing and reload sounds, and the Max Ammo and power-up grab sounds.
     - The Insta-Kill, Max Ammo and Nuke power-up sprites, and the Ray Gun's projectile and its explosion.
+    - The sounds, which were most likely pulled from World at War in the first place:
+        - The zombie's moans, sprinting, injured, headshot and attack sounds, and its fall when it dies.
+        - The announcer and jingles: the game start, round change, siren, purchase and mystery box sounds, the Nuke, Double Points, Insta-Kill, Max Ammo and Fire Sale pickups, the power-up grab, and the power-ups fading.
+        - Every weapon's firing and reload sounds (many still carry World at War's own names, like `wpn_ppsh_st_f` and `gr_357_open`).
+        - The intro music, the game over music, and the drinking, swallowing and bottle breaking sounds.
 - **Boondorl's [Weather library](https://github.com/Boondorl/Weather)**: the blood rain, vendored unchanged under its own license (`LICENSE-weather`).
 - **[Horde Hammer](https://github.com/error-error-fruit-user/horde-hammer)**: the zombies mode itself (rounds, points, doors, the box, perks, drops, last stand, the kick, the HUD), which nacht's own code became.
 
 ### Made for nacht
 
+- The mystery box, the doors and the Juggernog, Quick Revive, Speed Cola and Double Tap machines, drawn by Alexis Dutcher.
 - The crashed plane, drawn by `tools/plane.py`.
 - The chalk wall buys: the Kar98k's, M1 Carbine's and Thompson's by hand, the rest traced from the weapons' pickup sprites by `tools/chalk.py`.
 
