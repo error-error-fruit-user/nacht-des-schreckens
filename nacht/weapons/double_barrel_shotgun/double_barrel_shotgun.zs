@@ -1,7 +1,6 @@
-version "5.0.0"
-
-// Double-Barreled Shotgun: a drop-in weapon package for Horde Hammer. Its sprites are in sprites/weapons/double_barrel_shotgun/,
-// its sounds in sounds/weapons/double_barrel_shotgun/ and sndinfo.double_barrel_shotgun; copy all of them to use it elsewhere.
+// Double-Barreled Shotgun: a weapon package for Horde Hammer. Its sprites are in sprites/weapons/double_barrel_shotgun/,
+// its sounds and sndinfo.txt are next to this file in weapons/double_barrel_shotgun/; copy both folders, and add
+// its #include to ZSCRIPT.zs and its $include to SNDINFO.txt, to use it elsewhere.
 
 class Nacht_DoubleBarrelShotgunAmmo : Ammo {
     Default {

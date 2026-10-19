@@ -1,7 +1,6 @@
-version "5.0.0"
-
-// Type 100: a drop-in weapon package for Horde Hammer. Its sprites are in sprites/weapons/type100/,
-// its sounds in sounds/weapons/type100/ and sndinfo.type100; copy all of them to use it elsewhere.
+// Type 100: a weapon package for Horde Hammer. Its sprites are in sprites/weapons/type100/,
+// its sounds and sndinfo.txt are next to this file in weapons/type100/; copy both folders, and add
+// its #include to ZSCRIPT.zs and its $include to SNDINFO.txt, to use it elsewhere.
 
 class Nacht_Type100Ammo : Ammo {
     Default {

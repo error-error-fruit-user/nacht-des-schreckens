@@ -1,7 +1,6 @@
-version "5.0.0"
-
-// PPSh-41: a drop-in weapon package for Horde Hammer. Its sprites are in sprites/weapons/ppsh/,
-// its sounds in sounds/weapons/ppsh/ and sndinfo.ppsh; copy all of them to use it elsewhere.
+// PPSh-41: a weapon package for Horde Hammer. Its sprites are in sprites/weapons/ppsh/,
+// its sounds and sndinfo.txt are next to this file in weapons/ppsh/; copy both folders, and add
+// its #include to ZSCRIPT.zs and its $include to SNDINFO.txt, to use it elsewhere.
 
 class Nacht_PpshAmmo : Ammo {
     Default {

@@ -1,7 +1,6 @@
-version "5.0.0"
-
-// Kar98k: a drop-in weapon package for Horde Hammer. Its sprites are in sprites/weapons/kar98/,
-// its sounds in sounds/weapons/kar98/ and sndinfo.kar98; copy all of them to use it elsewhere.
+// Kar98k: a weapon package for Horde Hammer. Its sprites are in sprites/weapons/kar98/,
+// its sounds and sndinfo.txt are next to this file in weapons/kar98/; copy both folders, and add
+// its #include to ZSCRIPT.zs and its $include to SNDINFO.txt, to use it elsewhere.
 
 class Nacht_Kar98Ammo : Ammo {
     Default {

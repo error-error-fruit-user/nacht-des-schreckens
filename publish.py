@@ -100,7 +100,8 @@ def missing_sounds(files):
         packed.add(os.path.splitext(inside)[0].lower())
     found = []
     for path, inside in files:
-        if os.path.splitext(inside)[0].lower() != "sndinfo":
+        # SNDINFO lumps at the root, and the files they $include (like weapons/colt/sndinfo.txt)
+        if os.path.splitext(os.path.basename(inside))[0].lower() != "sndinfo":
             continue
         with open(path, errors="replace") as f:
             for number, line in enumerate(f, 1):

@@ -1,6 +1,0 @@
-// M1 Carbine
-weapons/carbine_fire       sounds/weapons/carbine/wpn_m1carbine_st_act.wav
-weapons/carbine_charge     sounds/weapons/carbine/gr_m1carbine_charge.wav
-weapons/carbine_futz       sounds/weapons/carbine/gr_m1carbine_futz.wav
-weapons/carbine_mag_in     sounds/weapons/carbine/gr_m1carbine_mag_in.wav
-weapons/carbine_mag_out    sounds/weapons/carbine/gr_m1carbine_mag_out.wav

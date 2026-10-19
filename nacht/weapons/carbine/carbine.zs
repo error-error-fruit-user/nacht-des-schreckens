@@ -1,7 +1,6 @@
-version "5.0.0"
-
-// M1 Carbine: a drop-in weapon package for Horde Hammer. Its sprites are in sprites/weapons/carbine/,
-// its sounds in sounds/weapons/carbine/ and sndinfo.carbine; copy all of them to use it elsewhere.
+// M1 Carbine: a weapon package for Horde Hammer. Its sprites are in sprites/weapons/carbine/,
+// its sounds and sndinfo.txt are next to this file in weapons/carbine/; copy both folders, and add
+// its #include to ZSCRIPT.zs and its $include to SNDINFO.txt, to use it elsewhere.
 
 class Nacht_CarbineAmmo : Ammo {
     Default {

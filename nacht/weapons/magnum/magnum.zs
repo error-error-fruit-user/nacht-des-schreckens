@@ -1,7 +1,6 @@
-version "5.0.0"
-
-// .357 Magnum: a drop-in weapon package for Horde Hammer. Its sprites are in sprites/weapons/magnum/,
-// its sounds in sounds/weapons/magnum/ and sndinfo.magnum; copy all of them to use it elsewhere.
+// .357 Magnum: a weapon package for Horde Hammer. Its sprites are in sprites/weapons/magnum/,
+// its sounds and sndinfo.txt are next to this file in weapons/magnum/; copy both folders, and add
+// its #include to ZSCRIPT.zs and its $include to SNDINFO.txt, to use it elsewhere.
 
 class Nacht_MagnumAmmo : Ammo {
     Default {

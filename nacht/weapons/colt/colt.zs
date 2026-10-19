@@ -1,7 +1,6 @@
-version "5.0.0"
-
-// M1911: a drop-in weapon package for Horde Hammer. Its sprites are in sprites/weapons/colt/,
-// its sounds in sounds/weapons/colt/ and sndinfo.colt; copy all of them to use it elsewhere.
+// M1911: a weapon package for Horde Hammer. Its sprites are in sprites/weapons/colt/,
+// its sounds and sndinfo.txt are next to this file in weapons/colt/; copy both folders, and add
+// its #include to ZSCRIPT.zs and its $include to SNDINFO.txt, to use it elsewhere.
 
 class Nacht_ColtAmmo : Ammo {
     Default {

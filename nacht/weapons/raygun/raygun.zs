@@ -1,7 +1,6 @@
-version "5.0.0"
-
-// Ray Gun: a drop-in weapon package for Horde Hammer. Its sprites are in sprites/weapons/raygun/,
-// its sounds in sounds/weapons/raygun/ and sndinfo.raygun; copy all of them to use it elsewhere.
+// Ray Gun: a weapon package for Horde Hammer. Its sprites are in sprites/weapons/raygun/,
+// its sounds and sndinfo.txt are next to this file in weapons/raygun/; copy both folders, and add
+// its #include to ZSCRIPT.zs and its $include to SNDINFO.txt, to use it elsewhere.
 
 class Nacht_Rayflux : Rocket {
     Default {

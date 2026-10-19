@@ -1,5 +1,5 @@
-// Nacht's sounds. The weapons' are in sndinfo.<weapon>; Horde Hammer's sounds (hh/...) are pointed at
-// nacht's at the end.
+// Nacht's sounds. At the end, Horde Hammer's sounds (hh/...) are pointed at nacht's, and each
+// weapon's weapons/<weapon>/sndinfo.txt is included.
 
 zombie/amb1 sounds/zombie/zomb1
 zombie/amb2 sounds/zombie/zomb2
@@ -93,3 +93,15 @@ $alias hh/double_points game/doublepoints
 $alias hh/max_ammo game/maxammo
 $alias hh/kaboom game/nuke
 $alias hh/fire_sale game/fire_sale
+
+// The weapons' sounds
+$include "weapons/carbine/sndinfo.txt"
+$include "weapons/colt/sndinfo.txt"
+$include "weapons/double_barrel_shotgun/sndinfo.txt"
+$include "weapons/kar98/sndinfo.txt"
+$include "weapons/m1garand/sndinfo.txt"
+$include "weapons/magnum/sndinfo.txt"
+$include "weapons/ppsh/sndinfo.txt"
+$include "weapons/raygun/sndinfo.txt"
+$include "weapons/thompson/sndinfo.txt"
+$include "weapons/type100/sndinfo.txt"

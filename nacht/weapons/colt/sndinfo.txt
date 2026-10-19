@@ -1,0 +1,4 @@
+// M1911
+weapons/colt weapons/colt/sounds/m1911
+weapons/coltReload1 weapons/colt/sounds/m191out
+weapons/coltReload2 weapons/colt/sounds/m191in

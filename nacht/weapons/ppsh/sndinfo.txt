@@ -1,0 +1,8 @@
+// PPSh-41
+weapons/ppsh_fire1 weapons/ppsh/sounds/wpn_ppsh_st_act.wav
+weapons/ppsh_fire2 weapons/ppsh/sounds/wpn_ppsh_st_sur.wav
+weapons/ppsh_fire3 weapons/ppsh/sounds/wpn_ppsh_st_f.wav
+weapons/ppsh_magin weapons/ppsh/sounds/ppsh_magin.wav
+weapons/ppsh_magout weapons/ppsh/sounds/ppsh_magout.wav
+weapons/ppsh_magtap weapons/ppsh/sounds/ppsh_magtap.wav
+weapons/ppsh_slide_forward weapons/ppsh/sounds/ppsh_slide_forward.wav

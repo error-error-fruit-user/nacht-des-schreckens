@@ -1,7 +1,6 @@
-version "5.0.0"
-
-// M1 Garand: a drop-in weapon package for Horde Hammer. Its sprites are in sprites/weapons/m1garand/,
-// its sounds in sounds/weapons/m1garand/ and sndinfo.m1garand; copy all of them to use it elsewhere.
+// M1 Garand: a weapon package for Horde Hammer. Its sprites are in sprites/weapons/m1garand/,
+// its sounds and sndinfo.txt are next to this file in weapons/m1garand/; copy both folders, and add
+// its #include to ZSCRIPT.zs and its $include to SNDINFO.txt, to use it elsewhere.
 
 class Nacht_M1GarandAmmo : Ammo {
     Default {
