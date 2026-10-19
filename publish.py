@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """Pack the mod folder into a playable .pk3 (a zip with another extension) in published/.
 
-usage: python3 publish.py [--out FILE] [--strict]
+usage: python3 publish.py [--out FILE] [--strict] [--no-library]
+
+When Horde Hammer's repository is next to this one (../horde-hammer), it is packed too and its pk3
+copied next to nacht's, so the two in published/ always match (a library older than nacht stops
+UZDoom at startup with "unknown actor property"). --no-library skips that.
 
 Dependency-free Python 3.8+. The pk3 is reproducible: files go in sorted order with a fixed
 timestamp, so the same folder always packs to the same bytes (and tdl hashes it the same).
@@ -21,6 +25,7 @@ import argparse
 import os
 import re
 import shutil
+import subprocess
 import sys
 import zipfile
 
@@ -31,6 +36,10 @@ NAME = "nacht.pk3"
 LICENSES = ["LICENSE-weather"]
 
 OUT = "published"
+# The library nacht runs on, packed alongside it when its repository is here
+LIBRARY = os.path.join("..", "horde-hammer")
+LIBRARY_PK3 = "horde-hammer.pk3"
+
 # 1980-01-01, the earliest time a zip can hold
 EPOCH = (1980, 1, 1, 0, 0, 0)
 
@@ -126,6 +135,7 @@ def main():
     parser.add_argument("--out", help=f"where to write the pk3 (default: {OUT}/{NAME}, and the "
                         f"licenses next to it); any other path writes only the pk3")
     parser.add_argument("--strict", action="store_true", help="fail on warnings")
+    parser.add_argument("--no-library", action="store_true", help="don't pack Horde Hammer too")
     options = parser.parse_args()
 
     here = os.path.dirname(os.path.abspath(__file__))
@@ -155,6 +165,11 @@ def main():
     pack(files, target)
     size = os.path.getsize(target) / (1024 * 1024)
     print(f"{target}: {len(files)} files, {size:.1f} MB")
+
+    library_script = os.path.join(LIBRARY, "publish.py")
+    if not options.no_library and os.path.isfile(library_script):
+        library_target = os.path.join(os.path.dirname(os.path.abspath(target)), LIBRARY_PK3)
+        subprocess.run([sys.executable, "-I", "publish.py", "--out", library_target], cwd=LIBRARY, check=True)
 
 
 if __name__ == "__main__":
