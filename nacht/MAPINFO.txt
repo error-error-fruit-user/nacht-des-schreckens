@@ -18,7 +18,7 @@ skill Normal {
 
 // Horde Hammer adds its own event handlers and editor numbers (27000-27099)
 GameInfo {
-    PlayerClasses = "Nacht_Player"
+    PlayerClasses = "Nacht_Player", "DoomPlayer"     // the box gives each its own slots
     StatusBarClass = "HH_Hud"
     AddEventHandlers = "Nacht_IntroHandler"     // the intro's title; the intro itself is ACS (LOADACS.txt)
 }
