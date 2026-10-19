@@ -3,9 +3,9 @@
 
 usage: python3 publish.py [--out FILE] [--strict] [--no-library]
 
-When Horde Hammer's repository is next to this one (../horde-hammer), it is packed too (into its own
-published/) and its pk3 copied next to nacht's, so every copy matches (a library older than nacht stops
-UZDoom at startup with "unknown actor property"). --no-library skips that.
+When Horde Hammer's repository is next to this one (../horde-hammer), it is packed too, into its own
+published/ only, so its pk3 there always matches nacht (a library older than nacht stops UZDoom at
+startup with "unknown actor property"). --no-library skips that.
 
 Dependency-free Python 3.8+. The pk3 is reproducible: files go in sorted order with a fixed
 timestamp, so the same folder always packs to the same bytes (and tdl hashes it the same).
@@ -38,7 +38,6 @@ LICENSES = ["LICENSE-weather"]
 OUT = "published"
 # The library nacht runs on, packed alongside it when its repository is here
 LIBRARY = os.path.join("..", "horde-hammer")
-LIBRARY_PK3 = "horde-hammer.pk3"
 
 # 1980-01-01, the earliest time a zip can hold
 EPOCH = (1980, 1, 1, 0, 0, 0)
@@ -166,13 +165,10 @@ def main():
     size = os.path.getsize(target) / (1024 * 1024)
     print(f"{target}: {len(files)} files, {size:.1f} MB")
 
-    # The library's own published/ is refreshed too, so no stale copy of it is left anywhere
+    # The library's own published/ is refreshed too (and left there), so it never lags behind nacht
     library_script = os.path.join(LIBRARY, "publish.py")
     if not options.no_library and os.path.isfile(library_script):
         subprocess.run([sys.executable, "-I", "publish.py"], cwd=LIBRARY, check=True)
-        library_target = os.path.join(os.path.dirname(os.path.abspath(target)), LIBRARY_PK3)
-        shutil.copy(os.path.join(LIBRARY, "published", LIBRARY_PK3), library_target)
-        print(f"{library_target}: copied from {LIBRARY}/published")
 
 
 if __name__ == "__main__":
