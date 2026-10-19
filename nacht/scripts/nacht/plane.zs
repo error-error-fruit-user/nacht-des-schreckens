@@ -1,5 +1,5 @@
-// The crashed plane outside (a placeholder red rectangle until it has art), burning: it lights its
-// own fires along the wreck, and more can be placed by hand (DoomEdNum 1017)
+// The crashed plane outside (drawn by tools/plane.py), burning: it lights its own fires along the
+// wreck, and more can be placed by hand (DoomEdNum 1017)
 
 class Nacht_Plane : Actor {
     // Where its fires burn: across the wreck (side) and up it (height), from its middle
