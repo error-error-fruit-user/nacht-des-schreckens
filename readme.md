@@ -48,10 +48,6 @@ This mod is meant to bring the features and spirit of classic 'Call of Duty Zomb
 
 - **Tyler Wojciechowski**: Lead Developer
 
-- **Jaquon Harvey**: Music composer
-
-- **Jared De Laurentis**: Game Designer
-
 ## Installation & Configuration
 
 Nacht des Schreckens runs on [UZDoom](https://github.com/UZDoom/UZDoom) 5 or newer (GZDoom can't run it any more), and needs [Horde Hammer](https://github.com/error-error-fruit-user/horde-hammer), loaded before it:
@@ -64,7 +60,7 @@ uzdoom -iwad doom2.wad -file horde-hammer.pk3 nacht.pk3
 
 Extract the 'doom2.wad' file from a legal copy of Doom 2 OR extract the 'freedoom2.wad' file from the Freedoom project: https://freedoom.github.io/download.html
 
-The easiest way to play is [tdl](https://github.com/error-error-fruit-user/tdl), a launcher for UZDoom: make a profile with `horde-hammer.pk3` then `nacht.pk3`, and give it this repository's `config.ini` as its ini to get nacht's controls.
+The easiest way to play is [tdl](https://github.com/error-error-fruit-user/tdl), a launcher for UZDoom: make a profile with `horde-hammer.pk3` then `nacht.pk3`, and give it this repository's `config.ini` as its ini to get nacht's keyboard controls. The controller layout below is Horde Hammer's: it offers it the first time you press a button on a controller.
 
 To avoid weapon sprite cropping, make sure the aspect ratio is set to 4:3 in-game (weapon sprites will be widened later to support wider ratios).
 
@@ -79,7 +75,7 @@ To play against the original rogues gallery of enemies, set 'Zombies' to 'Rogues
 |Use|E Key|A Button|
 |Reload|R Key|X Button|
 |Zoom|Right Click|Left Trigger|
-|Kick|F Key|Right Stick|
+|Kick|F Key|Right Stick Click|
 |Swap Weapon|Mouse Wheel|Y Button|
 |Quick Swap|1-9 Keys|D-Pad (Clockwise starting from left)|
 |Drop Weapon|C Key x2|Right Bumper x2|
