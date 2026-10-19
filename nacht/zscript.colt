@@ -128,3 +128,18 @@ class Nacht_Colt : HH_Weapon {
         Goto Ready;
     }
 }
+
+// The chalk outline to buy it off the wall
+class Nacht_ColtDrawing : HH_WallBuy {
+    Default {
+        //$Title "M1911 Wall Buy"
+        HH_WallBuy.Weapon "Nacht_Colt";
+        HH_WallBuy.Cost 250;
+    }
+
+    States {
+    Spawn:
+        CLTD A -1 Bright;
+        Stop;
+    }
+}

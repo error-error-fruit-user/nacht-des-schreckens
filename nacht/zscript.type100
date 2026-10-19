@@ -97,3 +97,18 @@ class Nacht_Type100 : HH_Weapon {
         Goto Ready;
     }
 }
+
+// The chalk outline to buy it off the wall
+class Nacht_Type100Drawing : HH_WallBuy {
+    Default {
+        //$Title "Type 100 Wall Buy"
+        HH_WallBuy.Weapon "Nacht_Type100";
+        HH_WallBuy.Cost 1000;
+    }
+
+    States {
+    Spawn:
+        T10D A -1 Bright;
+        Stop;
+    }
+}

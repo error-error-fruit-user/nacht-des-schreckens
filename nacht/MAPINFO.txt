@@ -39,4 +39,9 @@ DoomEdNums {
     1051 = "Nacht_CarbineDrawing"
     1052 = "Nacht_ThompsonDrawing"
     1053 = "Nacht_M1GarandDrawing"
+    1054 = "Nacht_ColtDrawing"
+    1055 = "Nacht_MagnumDrawing"
+    1056 = "Nacht_DoubleBarrelShotgunDrawing"
+    1057 = "Nacht_PpshDrawing"
+    1058 = "Nacht_Type100Drawing"
 }

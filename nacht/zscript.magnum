@@ -86,3 +86,18 @@ class Nacht_Magnum : HH_Weapon {
         Goto Ready;
     }
 }
+
+// The chalk outline to buy it off the wall
+class Nacht_MagnumDrawing : HH_WallBuy {
+    Default {
+        //$Title ".357 Magnum Wall Buy"
+        HH_WallBuy.Weapon "Nacht_Magnum";
+        HH_WallBuy.Cost 1000;
+    }
+
+    States {
+    Spawn:
+        MAGD A -1 Bright;
+        Stop;
+    }
+}

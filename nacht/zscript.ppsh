@@ -109,3 +109,18 @@ class Nacht_Ppsh : HH_Weapon {
         Goto Ready;
     }
 }
+
+// The chalk outline to buy it off the wall
+class Nacht_PpshDrawing : HH_WallBuy {
+    Default {
+        //$Title "PPSh-41 Wall Buy"
+        HH_WallBuy.Weapon "Nacht_Ppsh";
+        HH_WallBuy.Cost 2000;
+    }
+
+    States {
+    Spawn:
+        PPSD A -1 Bright;
+        Stop;
+    }
+}

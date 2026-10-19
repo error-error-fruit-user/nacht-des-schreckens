@@ -1,7 +1,6 @@
 .gitignore
 map01.dbs
 map01.wad.*
-run-windows/package.bat
 /secrets
 /published
 __pycache__/

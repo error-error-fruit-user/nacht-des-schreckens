@@ -148,7 +148,7 @@ class Nacht_M1GarandDrawing : HH_WallBuy {
 
     States {
     Spawn:
-        MINK A -1 Bright;
+        GRND A -1 Bright;
         Stop;
     }
 }

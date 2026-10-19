@@ -64,7 +64,7 @@ uzdoom -iwad doom2.wad -file horde-hammer.pk3 nacht.pk3
 
 Extract the 'doom2.wad' file from a legal copy of Doom 2 OR extract the 'freedoom2.wad' file from the Freedoom project: https://freedoom.github.io/download.html
 
-The 'run-linux' and 'run-windows' scripts still expect the old GZDoom setup and are being updated.
+The easiest way to play is [tdl](https://github.com/error-error-fruit-user/tdl), a launcher for UZDoom: make a profile with `horde-hammer.pk3` then `nacht.pk3`, and give it this repository's `config.ini` as its ini to get nacht's controls.
 
 To avoid weapon sprite cropping, make sure the aspect ratio is set to 4:3 in-game (weapon sprites will be widened later to support wider ratios).
 
@@ -87,19 +87,11 @@ To play against the original rogues gallery of enemies, set 'Zombies' to 'Rogues
 
 ## Multiplayer
 
-To host or join a multiplayer match, run the respective script.
-
-To host, the number of players will have to manually be set in the script.
-
-To join, the host's ip address will have to manually be set in the script.
+Host or join with tdl: the host serves the profile's files, and joiners download whatever they're missing.
 
 ## Cross Mod Support
 
 While there is initial support for use with other mods, there is still a long ways to go.
-
-## Android / Delta Touch
-
-This mod is able to run on Android through Delta Touch, but manual set up of the controls is needed.
 
 ## Next Milestone
 

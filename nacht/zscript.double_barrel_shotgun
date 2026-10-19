@@ -92,3 +92,18 @@ class Nacht_DoubleBarrelShotgun : HH_Weapon {
         Goto Ready;
     }
 }
+
+// The chalk outline to buy it off the wall
+class Nacht_DoubleBarrelShotgunDrawing : HH_WallBuy {
+    Default {
+        //$Title "Double-Barreled Shotgun Wall Buy"
+        HH_WallBuy.Weapon "Nacht_DoubleBarrelShotgun";
+        HH_WallBuy.Cost 1200;
+    }
+
+    States {
+    Spawn:
+        DBSD A -1 Bright;
+        Stop;
+    }
+}
