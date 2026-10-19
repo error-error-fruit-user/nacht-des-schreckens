@@ -1,0 +1,67 @@
+#library "nacht"
+#include "zcommon.acs"
+#include "hh.acs"
+
+// Nacht's map logic. Compiled by `secrets/acc.sh acs/nacht.acs nacht/acs/nacht.o` (with Horde
+// Hammer's acs/ on the include path) and loaded on every map by nacht/LOADACS.txt. The title over
+// the intro is drawn by Nacht_IntroHandler (ZScript), which hides once the game has started.
+
+// TIDs in map01
+#define INTRO_CAMERA 13
+#define INTRO_MOVER 20
+#define SWAY_TARGET 25
+#define INTRO_ZOMBIE 116
+#define GAME_OVER_CAMERA 11
+
+// The intro's length: the camera's sway, the flashing title, then round 1
+#define INTRO_TICS 1015
+
+int introDone;
+
+// The intro: the camera flies over the map with its music, then the game starts by itself, unless
+// someone skips it with the repulse key first
+script "Nacht_Intro" OPEN {
+    HH_Listen("repulse_pressed", "Nacht_SkipIntro");
+    HH_Listen("game_over", "Nacht_GameOver");
+    PlaySound(INTRO_CAMERA, "game/intro_cinematic", CHAN_5, 1.0, false, ATTN_NONE);
+    Delay(4);
+    Thing_Activate(INTRO_MOVER);
+    Delay(INTRO_TICS - 4);
+    ACS_NamedExecuteAlways("Nacht_StartGame", 0);
+}
+
+// Everyone entering before the game starts watches through the intro camera
+script "Nacht_IntroView" ENTER {
+    if (!introDone) {
+        ChangeCamera(INTRO_CAMERA, 0, 0);
+    }
+}
+
+script "Nacht_SkipIntro" (int player) {
+    ACS_NamedExecuteAlways("Nacht_StartGame", 0);
+}
+
+// Rain, the intro's actors gone, everyone at their respawn spot, round 1; only ever once
+script "Nacht_StartGame" (void) {
+    if (introDone) {
+        terminate;
+    }
+    introDone = true;
+    HH_Unlisten("repulse_pressed", "Nacht_SkipIntro");
+
+    SpawnForced("Weather", 0, 0, 0);
+    ScriptCall("Weather", "SetPrecipitationType", "BloodRain");
+    StopSound(INTRO_CAMERA, CHAN_5);
+    Thing_Remove(INTRO_ZOMBIE);
+    Thing_Remove(SWAY_TARGET);
+
+    ChangeCamera(0, 1, 0);
+    HH_MoveAllToSpawn();
+    HH_StartGame();
+}
+
+// The end: everyone watches the camera fly its path
+script "Nacht_GameOver" (int roundNumber) {
+    Thing_Activate(GAME_OVER_CAMERA);
+    ChangeCamera(GAME_OVER_CAMERA, 1, 0);
+}

@@ -1,0 +1,13 @@
+// The plane's fires light the wreck and the ground around it
+
+FlickerLight2 NACHT_PLANE_FIRE {
+    Color 1.0 0.5 0.15
+    Size 72
+    SecondarySize 96
+    Interval 0.08
+    Offset 0 24 0
+}
+
+Object Nacht_PlaneFire {
+    Frame FIRE { Light NACHT_PLANE_FIRE }
+}

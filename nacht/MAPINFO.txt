@@ -20,7 +20,7 @@ skill Normal {
 GameInfo {
     PlayerClasses = "Nacht_Player"
     StatusBarClass = "HH_Hud"
-    AddEventHandlers = "Nacht_IntroHandler"
+    AddEventHandlers = "Nacht_IntroHandler"     // the intro's title; the intro itself is ACS (LOADACS.txt)
 }
 
 DoomEdNums {
@@ -34,6 +34,7 @@ DoomEdNums {
     1014 = "Nacht_SwayTarget"
     1015 = "Nacht_Zombie"
     1016 = "Nacht_Plane"
+    1017 = "Nacht_PlaneFire"
 
     1050 = "Nacht_Kar98Drawing"
     1051 = "Nacht_CarbineDrawing"
