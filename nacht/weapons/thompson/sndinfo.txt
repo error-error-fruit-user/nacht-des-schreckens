@@ -1,5 +1,0 @@
-// Thompson
-weapons/thompson_fire weapons/thompson/sounds/wpn_thompson_st_act.wav
-weapons/thompson_magout weapons/thompson/sounds/gr_thompson_mag_out.wav
-weapons/thompson_magin weapons/thompson/sounds/gr_thompson_mag_in.wav
-weapons/thompson_charge weapons/thompson/sounds/gr_thompson_charge.wav

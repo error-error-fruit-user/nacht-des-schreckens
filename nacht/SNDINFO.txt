@@ -1,49 +1,6 @@
-// Nacht's sounds. At the end, Horde Hammer's sounds (hh/...) are pointed at nacht's, and each
-// weapon's weapons/<weapon>/sndinfo.txt is included.
-
-zombie/amb1 sounds/zombie/zomb1
-zombie/amb2 sounds/zombie/zomb2
-zombie/amb3 sounds/zombie/zomb3
-zombie/amb4 sounds/zombie/zomb4
-zombie/amb5 sounds/zombie/zomb5
-zombie/amb6 sounds/zombie/zomb6
-zombie/amb7 sounds/zombie/zomb7
-zombie/amb8 sounds/zombie/zomb8
-zombie/spr1 sounds/zombie/sprint1
-zombie/spr2 sounds/zombie/sprint2
-zombie/spr3 sounds/zombie/sprint3
-zombie/spr4 sounds/zombie/sprint4
-zombie/spr5 sounds/zombie/sprint5
-zombie/inj1 sounds/zombie/inj1
-zombie/inj2 sounds/zombie/inj2
-zombie/inj3 sounds/zombie/inj3
-zombie/crack1 sounds/zombie/crack1
-zombie/crack2 sounds/zombie/crack2
-zombie/crack3 sounds/zombie/crack3
-zombie/shot1  sounds/zombie/shot1
-zombie/shot2  sounds/zombie/shot2
-zombie/shot3  sounds/zombie/shot3
-zombie/shot4  sounds/zombie/shot4
-zombie/fall1  sounds/zombie/fall1
-zombie/fall2  sounds/zombie/fall2
-zombie/fall3  sounds/zombie/fall3
-zombie/fall4  sounds/zombie/fall4
-zombie/fall5  sounds/zombie/fall5
-zombie/attack1 sounds/zombie/attack1
-zombie/attack2 sounds/zombie/attack2
-zombie/attack3 sounds/zombie/attack3
-zombie/attack4 sounds/zombie/attack4
-zombie/attack5 sounds/zombie/attack5
-zombie/attack6 sounds/zombie/attack6
-zombie/attack7 sounds/zombie/attack7
-zombie/attack8 sounds/zombie/attack8
-$RANDOM zombie/normal { game/nosound zombie/amb1 zombie/amb2 zombie/amb3 zombie/amb4 zombie/amb5 zombie/amb6 zombie/amb7 zombie/amb8 }
-$RANDOM zombie/sprint { game/nosound zombie/spr1 zombie/spr2 zombie/spr3 zombie/spr4 zombie/spr5 }
-$RANDOM zombie/inj    { game/nosound zombie/inj1 zombie/inj2 zombie/inj3 }
-$RANDOM zombie/crack  { game/nosound zombie/crack1 zombie/crack2 zombie/crack3 }
-$RANDOM zombie/shot	  { game/nosound zombie/shot1 zombie/shot2 zombie/shot3 zombie/shot4 }
-$RANDOM zombie/fall	  { zombie/fall1 zombie/fall2 zombie/fall3 zombie/fall4 zombie/fall5 }
-$RANDOM zombie/attack { zombie/attack1 zombie/attack2 zombie/attack3 zombie/attack4 zombie/attack5 zombie/attack6 zombie/attack7 zombie/attack8 }
+// Nacht's sounds. At the end, Horde Hammer's sounds (hh/...) are pointed at nacht's. The zombies'
+// and the weapons' sounds are World at War's, rebuilt from the player's own game by doomify.py
+// into ../nacht-waw (its SNDINFO.txt).
 
 game/nuke     sounds/interactions/NUKE
 game/doublepoints   sounds/interactions/X2
@@ -65,15 +22,6 @@ game/purchase sounds/interactions/PURCHASE
 game/mystery sounds/interactions/MYSTERY
 game/gameover sounds/interactions/GAMEOVER.ogg
 
-
-
-
-
-
-
-
-
-
 ambience/rain sounds/ambience/rain.wav
 
 // Horde Hammer's sounds, as nacht's
@@ -93,15 +41,3 @@ $alias hh/double_points game/doublepoints
 $alias hh/max_ammo game/maxammo
 $alias hh/kaboom game/nuke
 $alias hh/fire_sale game/fire_sale
-
-// The weapons' sounds
-$include "weapons/carbine/sndinfo.txt"
-$include "weapons/colt/sndinfo.txt"
-$include "weapons/double_barrel_shotgun/sndinfo.txt"
-$include "weapons/kar98/sndinfo.txt"
-$include "weapons/m1garand/sndinfo.txt"
-$include "weapons/magnum/sndinfo.txt"
-$include "weapons/ppsh/sndinfo.txt"
-$include "weapons/raygun/sndinfo.txt"
-$include "weapons/thompson/sndinfo.txt"
-$include "weapons/type100/sndinfo.txt"

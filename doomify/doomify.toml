@@ -1,0 +1,34 @@
+# doomify-waw's settings for Nacht des Schreckens. Its World at War weapons and sounds aren't in
+# this repository: doomify.py rebuilds them from the player's own game, with Der Riese loaded,
+# into ../nacht-waw (a pk3 folder loaded after nacht). The weapons are weapons/*.toml, the
+# zombies' and other sounds sounds/*.toml.
+version = 1
+prefix = "Nacht"
+output = "../nacht-waw"
+damage_scale = 0.1
+# nacht's own sprites, so generated names never clash with them
+sprites_of = ["../nacht"]
+
+# The wall drawings' editor numbers: 1050-1058 are the ones map01 already has
+[editor_numbers]
+kar98k = 1050
+m1carbine = 1051
+thompson = 1052
+m1garand = 1053
+colt = 1054
+magnum = 1055
+doublebarrel = 1056
+ppsh = 1057
+type100 = 1058
+stg44 = 1059
+mp40 = 1060
+gewehr43 = 1061
+trenchgun = 1062
+bar = 1063
+fg42 = 1064
+ptrs41 = 1065
+panzerschrek = 1066
+m7_launcher = 1067
+bowie_knife = 1068
+stielhandgranate = 1069
+bouncing_betty = 1070

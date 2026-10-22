@@ -1,9 +1,0 @@
-// Kar98k
-weapons/kar98_fire1        weapons/kar98/sounds/wpn_kar98_st_f.wav
-weapons/kar98_fire2        weapons/kar98/sounds/wpn_kar98_st_act.wav
-weapons/kar98_fire3        weapons/kar98/sounds/wpn_kar98_st_r.wav
-weapons/kar98_bolt_up      weapons/kar98/sounds/gr_kar98_bolt_up.wav
-weapons/kar98_bolt_back    weapons/kar98/sounds/gr_kar98_bolt_back.wav
-weapons/kar98_bolt_forward weapons/kar98/sounds/gr_kar98_bolt_forward.wav
-weapons/kar98_clip_eject   weapons/kar98/sounds/gr_kar98_clip_eject.wav
-weapons/kar98_clip_land    weapons/kar98/sounds/gr_kar98_clip_land.wav

@@ -16,11 +16,12 @@ skill Normal {
     defaultSkill
 }
 
-// Horde Hammer adds its own event handlers and editor numbers (27000-27099)
+// Horde Hammer adds its own event handlers and editor numbers (27000-27099); the generated
+// ../nacht-waw adds the weapons' (the wall drawings, 1050-1070)
 GameInfo {
     PlayerClasses = "Nacht_Player", "DoomPlayer"     // the box gives each its own slots
     StatusBarClass = "HH_Hud"
-    AddEventHandlers = "Nacht_IntroHandler"     // the intro's title; the intro itself is ACS (LOADACS.txt)
+    AddEventHandlers = "Nacht_IntroHandler", "Nacht_WorldAtWar"  // the intro's title (the intro itself is ACS, LOADACS.txt); the check that doomify.py was run
 }
 
 DoomEdNums {
@@ -35,14 +36,4 @@ DoomEdNums {
     1015 = "Nacht_Zombie"
     1016 = "Nacht_Plane"
     1017 = "Nacht_PlaneFire"
-
-    1050 = "Nacht_Kar98Drawing"
-    1051 = "Nacht_CarbineDrawing"
-    1052 = "Nacht_ThompsonDrawing"
-    1053 = "Nacht_M1GarandDrawing"
-    1054 = "Nacht_ColtDrawing"
-    1055 = "Nacht_MagnumDrawing"
-    1056 = "Nacht_DoubleBarrelShotgunDrawing"
-    1057 = "Nacht_PpshDrawing"
-    1058 = "Nacht_Type100Drawing"
 }

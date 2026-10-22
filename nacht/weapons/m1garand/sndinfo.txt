@@ -1,7 +1,0 @@
-// M1 Garand
-weapons/m1g_fire weapons/m1garand/sounds/wpn_m1garand_st_act_c.wav
-weapons/m1g_open weapons/m1garand/sounds/m1gar_pull_slide.wav
-weapons/m1g_close weapons/m1garand/sounds/m1gar_breech_close.wav
-weapons/m1g_clipin weapons/m1garand/sounds/m1gar_clip_in.wav
-weapons/m1g_clipout weapons/m1garand/sounds/m1gar_clip_out.wav
-weapons/m1g_ping weapons/m1garand/sounds/wpn_m1garand_clip.wav

@@ -1,7 +1,0 @@
-// Ray Gun
-weapons/raygun weapons/raygun/sounds/raygun
-weapons/rayflux weapons/raygun/sounds/rayflux
-weapons/raygunReload1 weapons/raygun/sounds/raygunre1
-weapons/raygunReload2 weapons/raygun/sounds/raygunre2
-weapons/raygunReload3 weapons/raygun/sounds/raygunre3
-weapons/rayflux_explode weapons/raygun/sounds/rayflux_explode.wav

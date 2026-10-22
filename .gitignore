@@ -5,3 +5,9 @@ map01.wad.*
 /published
 __pycache__/
 /CLAUDE.md
+
+# Built by doomify.py from the player's own World at War: never shared
+/nacht-waw/
+/nacht-waw.pk3
+# doomify-waw and hell-hound, cloned and built by doomify.py --source
+/doomify/src/

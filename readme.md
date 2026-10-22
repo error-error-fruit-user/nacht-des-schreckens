@@ -16,19 +16,26 @@ The zombies mode itself is [Horde Hammer](https://github.com/error-error-fruit-u
 
 ## Installation & Configuration
 
-Nacht des Schreckens runs on [UZDoom](https://github.com/UZDoom/UZDoom) 5 or newer, and needs [Horde Hammer](https://github.com/error-error-fruit-user/horde-hammer), loaded before it:
+Nacht des Schreckens runs on [UZDoom](https://github.com/UZDoom/UZDoom) 5 or newer, and needs [Horde Hammer](https://github.com/error-error-fruit-user/horde-hammer), loaded before it, and **World at War's weapons, which you make from your own copy of the game** before you play for the first time.
+
+They aren't in this repository, because World at War's assets can't be shared. `doomify.py` rebuilds them, with [Doomify WaW](https://github.com/error-error-fruit-user/doomify-waw), from **Call of Duty: World at War** (Steam) while it runs, into `nacht-waw/`: every weapon of Der Riese (the M1911 to the Wunderwaffe DG-2, their Pack-a-Punched versions, the Stielhandgranate, Bouncing Betty, cymbal monkey and Bowie knife), their wall drawings and sounds, and the zombies' voices. It needs [Blender](https://www.blender.org) 4.0 or newer, which renders the weapons, and takes about an hour the first time:
+
+1. Start World at War and, in Zombies, play Der Riese solo. Stay in the map.
+2. Run `python3 doomify.py` here (`python3 doomify.py --pack` also makes `nacht-waw.pk3`).
+
+It runs the `doomify-waw` executable in `doomify/`, or with `--source` builds it from its repository (that needs git and [Rust](https://rustup.rs)). `doomify/` also holds the weapons' settings: a TOML per weapon (`doomify/weapons/`), the zombies' sounds (`doomify/sounds/`) and `doomify/doomify.toml`. Then load the three, in this order:
 
 ```
-uzdoom -iwad doom2.wad -file horde-hammer.pk3 nacht.pk3
+uzdoom -iwad doom2.wad -file horde-hammer.pk3 nacht.pk3 nacht-waw
 ```
 
-`python3 publish.py` here (and in Horde Hammer) makes the pk3s in `published/`. Without Horde Hammer, UZDoom stops at startup with "Unknown class HH_...".
+`python3 publish.py` here (and in Horde Hammer) makes the pk3s in `published/`; `nacht-waw` is yours alone, never share it. Without Horde Hammer, UZDoom stops at startup with "Unknown class HH_..."; without `nacht-waw`, the game stops and tells you to run `doomify.py`.
 
 For the IWAD, use 'doom2.wad' from a legal copy of [Doom + Doom II](https://store.steampowered.com/app/2280/DOOM__DOOM_II/), or 'freedoom2.wad' from the [Freedoom project](https://freedoom.github.io/download.html).
 
-The easiest way to play is [tdl](https://github.com/error-error-fruit-user/tdl), a launcher for UZDoom: make a profile with `horde-hammer.pk3` then `nacht.pk3`, and give it this repository's `config.ini` as its ini to get nacht's keyboard controls. The controller layout below is Horde Hammer's: it offers it the first time you press a button on a controller.
+The easiest way to play is [tdl](https://github.com/error-error-fruit-user/tdl), a launcher for UZDoom: make a profile with `horde-hammer.pk3`, `nacht.pk3` then the `nacht-waw` folder, and give it this repository's `config.ini` as its ini to get nacht's keyboard controls. The controller layout below is Horde Hammer's: it offers it the first time you press a button on a controller.
 
-To avoid weapon sprite cropping, set the aspect ratio to 4:3 in-game (the weapon sprites will be widened later for wider ratios).
+The weapons are drawn wide enough for screens up to 21:9.
 
 To play against Doom's own monsters instead of the zombies, set 'Zombies' to 'Rogues gallery' in the full options menu. Horde Hammer's own options (toggled zoom, where each part of the HUD goes) are under 'Horde Hammer Options'.
 
@@ -41,7 +48,8 @@ To play against Doom's own monsters instead of the zombies, set 'Zombies' to 'Ro
 |Use|E Key|A Button|
 |Reload|R Key|X Button|
 |Zoom|Right Click|Left Trigger|
-|Kick|F Key|Right Stick Click|
+|Kick (a stab, once you own the Bowie knife)|F Key|Right Stick Click|
+|Equipment (monkey, Betty, Bowie knife, grenades)|G Key||
 |Swap Weapon|Mouse Wheel|Y Button|
 |Quick Swap|1-9 Keys|D-Pad (Clockwise starting from left)|
 |Drop Weapon|C Key x2|Right Bumper x2|
@@ -63,19 +71,17 @@ Host or join with tdl: the host serves the profile's files, and joiners download
 - **id Software's [Doom + Doom II](https://store.steampowered.com/app/2280/DOOM__DOOM_II/)**: the IWAD the mod runs on. Nacht ships no textures of its own, so every wall, floor and ceiling on the map is a Doom 2 texture (`GRAY5`, `ROCK3`, `RROCK03`, `BROWNHUG`, `FLAT5_4`, `FLAT1`, ...), and so is the sky. The fires on the crashed plane loop the Arch-vile's flame frames (`FIRE`). The Doom marine player class keeps Doom's weapons, and the 'Rogues gallery' option sends Doom's monsters instead of the zombies.
 - **[Freedoom](https://freedoom.github.io/)**: the free IWAD the mod also runs on, in place of Doom 2.
 - **Treyarch's [Call of Duty: World at War](https://store.steampowered.com/app/10090/Call_of_Duty_World_at_War/)**: the map remade, and the source of most of nacht's art:
-    - The weapons' first-person and pickup sprites, converted from World at War to Doom's sprite style: the M1911, .357 Magnum, M1 Garand, M1 Carbine, Kar98k, Thompson, PPSh-41, Type 100, double-barreled shotgun and Ray Gun.
+    - Der Riese's weapons, their wall drawings and sounds and the zombies' voices, rebuilt by `doomify.py` from your own copy of the game ([Doomify WaW](https://github.com/error-error-fruit-user/doomify-waw), with [Hell Hound](https://github.com/error-error-fruit-user/hell-hound) reading the game and Blender rendering it). None of it is in this repository.
     - The perks' bottles and the four drinking animations, cropped frame by frame from the game.
-    - Every weapon's firing and reload sounds, taken straight from the game (many still carry its own names, like `wpn_ppsh_st_f` and `gr_357_open`).
     - The perk drinking sounds: swallowing and the bottle breaking.
 
 ### Other mods and libraries
 
 - **ZDL's [COD Zombies](https://www.moddb.com/mods/call-of-duty-nazi-zombies)** (the ZDL Edition of Call of Duty: Zombies for Doom 2), where nacht started out:
     - The zombie: every frame of its walking, attacking and dying sprites (`NAZO`).
-    - The Insta-Kill, Max Ammo and Nuke power-up sprites, and the Ray Gun's projectile and its explosion.
+    - The Insta-Kill, Max Ammo and Nuke power-up sprites.
     - The Insta-Kill and Double Points HUD icons.
     - The rest of the sounds, which were most likely pulled from World at War in the first place:
-        - The zombie's moans, sprinting, injured, headshot and attack sounds, and its fall when it dies.
         - The announcer and jingles: the game start, round change, siren, purchase and mystery box sounds, the Nuke, Double Points, Insta-Kill, Max Ammo and Fire Sale pickups, the power-up grab, and the power-ups fading.
         - The intro music and the game over music.
 - **Boondorl's [Weather library](https://github.com/Boondorl/Weather)**: the blood rain, vendored unchanged under its own license (`LICENSE-weather`).
@@ -86,9 +92,10 @@ Host or join with tdl: the host serves the profile's files, and joiners download
 - The mystery box, the doors and the Juggernog, Quick Revive, Speed Cola and Double Tap machines, drawn by Alexis Dutcher.
 - The Fire Sale and perk HUD icons, drawn by Tyler Wojciechowski with ZDL's power-up icons as a template.
 - The crashed plane, drawn by `tools/plane.py`.
-- The chalk wall buys: the Kar98k's, M1 Carbine's and Thompson's by hand, the rest traced from the weapons' pickup sprites by `tools/chalk.py`.
 
 ### Used in earlier versions
+
+- The first weapons' sprites and sounds (the M1911, .357 Magnum, M1 Garand, M1 Carbine, Kar98k, Thompson, PPSh-41, Type 100, double-barreled shotgun and Ray Gun), converted from World at War; the zombie's sounds and the Ray Gun's projectile from ZDL's COD Zombies; the chalk wall buys, drawn by hand or traced by `tools/chalk.py`. Doomify WaW now makes all of these from the player's own game.
 
 - **dodopod's [ZScript Weapons Library](https://forum.zdoom.org/viewtopic.php?t=61172)**: the first weapons, since rewritten.
 - **[NTM's Quick Kick](https://github.com/LocalInsomniac/NTMAi/blob/master/zscript/weapons/kick.txt)** ([forum thread](https://forum.zdoom.org/viewtopic.php?p=1181624#p1181624)): the old kick, replaced by Horde Hammer's own.
