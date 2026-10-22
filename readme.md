@@ -18,7 +18,7 @@ The zombies mode itself is [Horde Hammer](https://github.com/error-error-fruit-u
 
 Nacht des Schreckens runs on [UZDoom](https://github.com/UZDoom/UZDoom) 5 or newer, and needs [Horde Hammer](https://github.com/error-error-fruit-user/horde-hammer), loaded before it, and **World at War's weapons, which you make from your own copy of the game** before you play for the first time.
 
-They aren't in this repository, because World at War's assets can't be shared. `doomify.py` rebuilds them, with [Doomify WaW](https://github.com/error-error-fruit-user/doomify-waw), from **Call of Duty: World at War** (Steam) while it runs, into `nacht-waw/`: every weapon of Der Riese (the M1911 to the Wunderwaffe DG-2, their Pack-a-Punched versions, the Stielhandgranate, Bouncing Betty, cymbal monkey and Bowie knife), their wall drawings and sounds, and the zombies' voices. It needs [Blender](https://www.blender.org) 4.0 or newer, which renders the weapons, and takes about an hour the first time:
+They aren't in this repository, because World at War's assets can't be shared. `doomify.py` rebuilds them, with [Doomify WaW](https://github.com/error-error-fruit-user/doomify-waw), from **Call of Duty: World at War** (Steam) while it runs, into `nacht-waw/`: every weapon of Der Riese (the M1911 to the Wunderwaffe DG-2, their Pack-a-Punched versions, the Stielhandgranate, Bouncing Betty, cymbal monkey and Bowie knife), the perk bottles and their drinking, their wall drawings and sounds, and the zombies' voices. The perk machines are nacht's own. It needs [Blender](https://www.blender.org) 4.0 or newer, which renders the weapons, and takes about an hour the first time:
 
 1. Start World at War and, in Zombies, play Der Riese solo. Stay in the map.
 2. Run `python3 doomify.py` here (`python3 doomify.py --pack` also makes `nacht-waw.pk3`).
@@ -71,8 +71,7 @@ Host or join with tdl: the host serves the profile's files, and joiners download
 - **id Software's [Doom + Doom II](https://store.steampowered.com/app/2280/DOOM__DOOM_II/)**: the IWAD the mod runs on. Nacht ships no textures of its own, so every wall, floor and ceiling on the map is a Doom 2 texture (`GRAY5`, `ROCK3`, `RROCK03`, `BROWNHUG`, `FLAT5_4`, `FLAT1`, ...), and so is the sky. The fires on the crashed plane loop the Arch-vile's flame frames (`FIRE`). The Doom marine player class keeps Doom's weapons, and the 'Rogues gallery' option sends Doom's monsters instead of the zombies.
 - **[Freedoom](https://freedoom.github.io/)**: the free IWAD the mod also runs on, in place of Doom 2.
 - **Treyarch's [Call of Duty: World at War](https://store.steampowered.com/app/10090/Call_of_Duty_World_at_War/)**: the map remade, and the source of most of nacht's art:
-    - Der Riese's weapons, their wall drawings and sounds and the zombies' voices, rebuilt by `doomify.py` from your own copy of the game ([Doomify WaW](https://github.com/error-error-fruit-user/doomify-waw), with [Hell Hound](https://github.com/error-error-fruit-user/hell-hound) reading the game and Blender rendering it). None of it is in this repository.
-    - The perks' bottles and the four drinking animations, cropped frame by frame from the game.
+    - Der Riese's weapons, perk bottles and drinking, their wall drawings and sounds and the zombies' voices, rebuilt by `doomify.py` from your own copy of the game ([Doomify WaW](https://github.com/error-error-fruit-user/doomify-waw), with [Hell Hound](https://github.com/error-error-fruit-user/hell-hound) reading the game and Blender rendering it). None of it is in this repository.
     - The perk drinking sounds: swallowing and the bottle breaking.
 
 ### Other mods and libraries
@@ -95,7 +94,7 @@ Host or join with tdl: the host serves the profile's files, and joiners download
 
 ### Used in earlier versions
 
-- The first weapons' sprites and sounds (the M1911, .357 Magnum, M1 Garand, M1 Carbine, Kar98k, Thompson, PPSh-41, Type 100, double-barreled shotgun and Ray Gun), converted from World at War; the zombie's sounds and the Ray Gun's projectile from ZDL's COD Zombies; the chalk wall buys, drawn by hand or traced by `tools/chalk.py`. Doomify WaW now makes all of these from the player's own game.
+- The perks' bottles and the four drinking animations, cropped frame by frame from World at War. The first weapons' sprites and sounds (the M1911, .357 Magnum, M1 Garand, M1 Carbine, Kar98k, Thompson, PPSh-41, Type 100, double-barreled shotgun and Ray Gun), converted from World at War; the zombie's sounds and the Ray Gun's projectile from ZDL's COD Zombies; the chalk wall buys, drawn by hand or traced by `tools/chalk.py`. Doomify WaW now makes all of these from the player's own game.
 
 - **dodopod's [ZScript Weapons Library](https://forum.zdoom.org/viewtopic.php?t=61172)**: the first weapons, since rewritten.
 - **[NTM's Quick Kick](https://github.com/LocalInsomniac/NTMAi/blob/master/zscript/weapons/kick.txt)** ([forum thread](https://forum.zdoom.org/viewtopic.php?p=1181624#p1181624)): the old kick, replaced by Horde Hammer's own.
