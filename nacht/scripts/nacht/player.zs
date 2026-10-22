@@ -4,7 +4,10 @@
 class Nacht_Player : DoomPlayer {
     Default {
         Player.DisplayName "Marine (Nacht)";
+        // a start item gets no ammo of its own (Weapon.AmmoGive is for pickups)
         Player.StartItem "Nacht_Colt";
+        Player.StartItem "Nacht_ColtAmmo", 32;
         Player.StartItem "Nacht_Stielhandgranate";
+        Player.StartItem "Nacht_StielhandgranateAmmo", 2;
     }
 }
