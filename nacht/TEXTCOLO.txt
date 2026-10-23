@@ -1,0 +1,31 @@
+// Nacht's colours for menus and messages (MAPINFO's GameInfo picks them for the menus)
+
+NachtBlood
+{
+    #1A0204  #FF4A3C
+Console:
+    #1A0204  #A01418    0 127
+    #A01418  #FF8070  128 256
+Flat:
+    #C8161C
+}
+
+NachtBone
+{
+    #2A241A  #F2EAD6
+Console:
+    #2A241A  #9C927A    0 127
+    #9C927A  #FFFFFF  128 256
+Flat:
+    #D6CCB2
+}
+
+NachtRust
+{
+    #2A1006  #F0A050
+Console:
+    #2A1006  #A0501C    0 127
+    #A0501C  #FFD090  128 256
+Flat:
+    #C06A28
+}

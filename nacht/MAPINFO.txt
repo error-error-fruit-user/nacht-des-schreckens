@@ -22,6 +22,21 @@ GameInfo {
     PlayerClasses = "Nacht_Player", "DoomPlayer"     // the box gives each its own slots
     StatusBarClass = "HH_Hud"
     AddEventHandlers = "Nacht_IntroHandler", "Nacht_WorldAtWar"  // the intro's title (the intro itself is ACS, LOADACS.txt); the check that doomify.py was run
+
+    // the theme (tools/theme.py draws its pictures, TEXTCOLO.txt has its colours)
+    TitlePage = "TITLEPIC"
+    DimColor = "1a 02 04"
+    DimAmount = 0.6
+    MenuSliderColor = "NachtBlood"
+    MenuSliderBackColor = "NachtBone"
+    MenuFontColor_Title = "NachtBlood"
+    MenuFontColor_Label = "NachtBone"
+    MenuFontColor_Value = "NachtRust"
+    MenuFontColor_Action = "NachtRust"
+    MenuFontColor_Header = "NachtBlood"
+    MenuFontColor_Highlight = "NachtRust"
+    MenuFontColor_Selection = "NachtBlood"
+    PauseSign = "NACHTPAU"
 }
 
 DoomEdNums {

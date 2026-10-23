@@ -1,0 +1,3 @@
+// The startup window, before anything else loads: its title and colours (text, background)
+STARTUPTITLE = "Nacht des Schreckens"
+STARTUPCOLORS = "d6ccb2", "1a0204"

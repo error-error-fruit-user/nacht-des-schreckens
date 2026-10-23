@@ -91,6 +91,7 @@ Host or join with tdl: the host serves the profile's files, and joiners download
 - The mystery box, the doors and the Juggernog, Quick Revive, Speed Cola and Double Tap machines, drawn by Alexis Dutcher.
 - The Fire Sale and perk HUD icons, drawn by Tyler Wojciechowski with ZDL's power-up icons as a template.
 - The crashed plane, drawn by `tools/plane.py`.
+- The menu theme: the title screen, the console's background, the menu's title, the pause sign and the blood-drop selector, drawn by `tools/theme.py`, in nacht's own colours (`TEXTCOLO.txt`).
 
 ### Used in earlier versions
 

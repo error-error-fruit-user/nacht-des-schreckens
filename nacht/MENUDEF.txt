@@ -8,3 +8,46 @@ OptionValue "Nacht_Zombies" {
 AddOptionMenu "OptionsMenu" {
     Option "$NACHT_MENU_ZOMBIES", "nacht_rogues_gallery", "Nacht_Zombies"
 }
+
+// Nacht's theme: the menus in its blood red and bone (TEXTCOLO.txt), a drop of blood for the
+// selector, its name for the main menu's title (tools/theme.py draws the pictures). The menus below
+// are UZDoom's own Doom ones, defined again after the defaults so that they take them.
+
+DefaultListMenu {
+    Font "BigFont", "NachtBone", "NachtBlood"
+    Selector "NACHTSEL", -16, -1
+    LineSpacing 18
+}
+
+ListMenu "MainMenu" {
+    StaticPatch 62, 6, "NACHTLOG"
+    Position 104, 78
+    TextItem "$MNU_NEWGAME", "n", "PlayerclassMenu"
+    TextItem "$MNU_OPTIONS", "o", "OptionsMenu"
+    TextItem "$MNU_LOADGAME", "l", "LoadGameMenu"
+    TextItem "$MNU_SAVEGAME", "s", "SaveGameMenu"
+    TextItem "$MNU_QUITGAME", "q", "QuitMenu"
+}
+
+ListMenu "PlayerclassMenu" {
+    NetgameMessage "$NEWGAME"
+    StaticTextCentered 160, 15, "$MNU_CHOOSECLASS"
+    Position 48, 63
+    PlayerDisplay 220, 63, "1a 02 04", "60 08 0c"
+    MouseWindow 0, 220
+}
+
+ListMenu "LoadGameMenu" {
+    NetgameMessage "$LOADNET"
+    CaptionItem "$MNU_LOADGAME"
+    Position 80, 40
+    Class "LoadMenu"
+    Size Clean
+}
+
+ListMenu "SaveGameMenu" {
+    CaptionItem "$MNU_SAVEGAME"
+    Position 80, 40
+    Class "SaveMenu"
+    Size Clean
+}
