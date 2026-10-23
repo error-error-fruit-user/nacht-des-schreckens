@@ -161,13 +161,22 @@ def icon():
                 counts[pixel] = counts.get(pixel, 0) + 1
     body = max((p for p in counts if sum(p[:3]) < 384), key=counts.get)
     light = max(counts, key=lambda p: sum(p[:3]))
-    # paint over everything inside the shield's border that isn't body coloured
-    border = 3
-    for y in range(border, height - border):
-        for x in range(border, width - border):
-            pixel = rows[y][x]
-            inside = all(rows[y + dy][x + dx][3] == 255 for dx in (-border, border) for dy in (-border, border))
-            if pixel[3] == 255 and inside and pixel == light:
+    # the border is the light reached from the picture's edge; any other light (the skull) goes
+    def is_light(pixel):
+        return pixel[3] == 255 and sum(pixel[:3]) > 600
+
+    border = set()
+    todo = [(x, y) for y in range(height) for x in (0, width - 1)] + [(x, y) for x in range(width) for y in (0, height - 1)]
+    while todo:
+        x, y = todo.pop()
+        if (x, y) in border or not (0 <= x < width and 0 <= y < height) or not is_light(rows[y][x]):
+            continue
+        border.add((x, y))
+        # the outline steps diagonally down to the point
+        todo += [(x + dx, y + dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1)]
+    for y in range(height):
+        for x in range(width):
+            if (x, y) not in border and rows[y][x][3] == 255 and rows[y][x] != body:
                 rows[y][x] = body
     stamp(rows, width // 2, height // 2 + 1, 2, light)
     return rows
