@@ -22,7 +22,8 @@ give = 120
 [fire]
 auto = false
 time = 0.135
-damage = 105
+# doubled: nacht's Garand hits harder than World at War's
+damage = 210
 spread = 2.0
 ads_spread = 0.3
 
