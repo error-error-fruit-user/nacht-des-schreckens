@@ -227,11 +227,12 @@ def plan(args):
         "in-place": "    - installs in published/releases/ itself (or --dir)",
         "user": f"    - installs in {user} (or --dir)",
         "system": f"    - installs in {system} (or --dir), which needs "
-                  f"{'administrator' if WINDOWS else 'root'}",
+                  f"{'administrator' if WINDOWS else 'root: the installer runs with sudo'}",
     }
     lines.append(where.get(args.mode) or
                  f"    - asks where to install: in place, for you ({user}) or for everyone "
-                 f"({system}, needs {'administrator' if WINDOWS else 'root'})")
+                 f"({system}, {'needs administrator' if WINDOWS else 'the installer run with sudo'}); "
+                 "asked before the build")
     if args.dir:
         art = "artifacts/ in --dir"
     elif args.mode == "in-place":
@@ -359,7 +360,60 @@ def shortcut(args):
                   "World at War's Nacht der Untoten on Doom 2, in tdl")
 
 
+def rust_on_path():
+    """Puts rustup's folder ($CARGO_HOME/bin, else ~/.cargo/bin) on the PATH when cargo isn't on
+    it, as a shell that never ran rustup's profile line leaves it; everything this runs inherits it."""
+    if shutil.which("cargo"):
+        return
+    home = os.environ.get("CARGO_HOME") or os.path.join(os.path.expanduser("~"), ".cargo")
+    folder = os.path.join(home, "bin")
+    if any(os.path.isfile(os.path.join(folder, name)) for name in ("cargo", "cargo.exe")):
+        os.environ["PATH"] = folder + os.pathsep + os.environ.get("PATH", "")
+
+
+def as_root():
+    return not WINDOWS and os.geteuid() == 0
+
+
+def refuse_root_build(args):
+    """Building as root (sudo) leaves files in published/ that only root can change: refused."""
+    if as_root() and not args.no_build:
+        note("run as root: refused to build")
+        sys.exit("Don't run this with sudo: building as root leaves files in published/ that only "
+                 "root can change. Run it as yourself; to install for everyone, it runs only the "
+                 "installer with sudo.")
+
+
+def ask_mode(args):
+    """Where to install, asked here when --mode doesn't say, so an install for everyone can run the
+    installer with sudo instead of failing for want of root."""
+    if args.mode or not sys.stdin.isatty():
+        return
+    choices = {"": "in-place", "1": "in-place", "2": "user", "3": "system"}
+    print(f"Where should Nacht des Schreckens be installed?\n"
+          "  1) In place, in published/releases/ (default)\n"
+          "  2) For you\n"
+          "  3) For everyone (the installer runs with sudo, which asks for your password)")
+    while True:
+        answer = input("Choice [1]: ").strip()
+        if answer in choices:
+            args.mode = choices[answer]
+            note(f"asked where to install, the answer was {answer!r}: {args.mode}")
+            return
+        print("1, 2 or 3")
+
+
+def elevated(command, args):
+    """`command`, run with sudo for an install for everyone when this isn't root already."""
+    if args.mode == "system" and not WINDOWS and not as_root():
+        print("Installing for everyone needs root: running the installer with sudo")
+        note("running the installer with sudo")
+        return ["sudo", *command]
+    return command
+
+
 def main():
+    rust_on_path()
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--accept", action="store_true", help="go ahead without asking")
     build_how = parser.add_mutually_exclusive_group()
@@ -380,12 +434,14 @@ def main():
                         help="make no shortcuts, and don't ask about them")
     args = parser.parse_args()
     note(f"=== {os.path.basename(__file__)} {' '.join(sys.argv[1:])} ===")
+    refuse_root_build(args)
 
     warning(plan(args))
     shortcuts = wants_shortcuts(args, "Nacht des Schreckens")
     if not agreed(args.accept):
         note("not going ahead: nothing was done")
         sys.exit("Nothing was done.")
+    ask_mode(args)
     build(args)
     command = [installer()]
     for flag, value in (("--mode", args.mode), ("--dir", args.dir), ("--blender", args.blender),
@@ -398,7 +454,7 @@ def main():
                                       ("--no-blender", args.no_blender),
                                       ("--no-doomify", args.no_doomify),
                                       ("--no-song", args.no_song)) if on]
-    run(command)
+    run(elevated(command, args))
     if shortcuts:
         shortcut(args)
 

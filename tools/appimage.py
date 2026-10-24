@@ -115,8 +115,20 @@ def make(name, executable, target):
         os.replace(partial, target)
 
 
+def rust_on_path():
+    """Puts rustup's folder ($CARGO_HOME/bin, else ~/.cargo/bin) on the PATH when cargo isn't on
+    it, as a shell that never ran rustup's profile line leaves it; everything this runs inherits it."""
+    if shutil.which("cargo"):
+        return
+    home = os.environ.get("CARGO_HOME") or os.path.join(os.path.expanduser("~"), ".cargo")
+    folder = os.path.join(home, "bin")
+    if any(os.path.isfile(os.path.join(folder, name)) for name in ("cargo", "cargo.exe")):
+        os.environ["PATH"] = folder + os.pathsep + os.environ.get("PATH", "")
+
+
 def build_all(out, names=None):
     """Make the AppImages of names (default: all) in out. Returns the paths made."""
+    rust_on_path()
     if platform.system() != "Linux":
         print("note: AppImages are Linux-only; skipped", file=sys.stderr)
         return []
@@ -140,6 +152,7 @@ def build_all(out, names=None):
 
 def build_exes(out, names=None):
     """Cross-build the Windows executables of names (default: all) into out. Returns the paths."""
+    rust_on_path()
     for tool in ("cargo",):
         if shutil.which(tool) is None:
             sys.exit(f"making the Windows executables needs {tool}")

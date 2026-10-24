@@ -174,8 +174,20 @@ def installed():
     return beside if os.path.isfile(beside) else shutil.which("doomify-waw")
 
 
+def rust_on_path():
+    """Puts rustup's folder ($CARGO_HOME/bin, else ~/.cargo/bin) on the PATH when cargo isn't on
+    it, as a shell that never ran rustup's profile line leaves it; everything this runs inherits it."""
+    if shutil.which("cargo"):
+        return
+    home = os.environ.get("CARGO_HOME") or os.path.join(os.path.expanduser("~"), ".cargo")
+    folder = os.path.join(home, "bin")
+    if any(os.path.isfile(os.path.join(folder, name)) for name in ("cargo", "cargo.exe")):
+        os.environ["PATH"] = folder + os.pathsep + os.environ.get("PATH", "")
+
+
 def rust_ok():
     """Whether cargo is there and new enough for doomify-waw and hell-hound (RUST)."""
+    rust_on_path()
     cargo = shutil.which("cargo")
     if cargo is None:
         return False
