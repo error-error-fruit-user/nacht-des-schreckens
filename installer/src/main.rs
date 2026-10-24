@@ -5,8 +5,11 @@
 //! ```text
 //! horde-hammer.pk3           the library nacht runs on
 //! nacht.pk3                  the map
-//! doomify.py, doomify/       the script that rebuilds the weapons, and its settings
 //! ```
+//!
+//! `doomify.py` and the `doomify/**/*.toml` settings are inside the installer itself (embedded by
+//! `build.rs` with `include_str!` from the repository), so to customize them, edit them and
+//! rebuild it.
 //!
 //! The tools aren't in it. `tdl`, `tdl-install` and `doomify-waw` are taken from beside this
 //! program if they are there, and otherwise downloaded from the latest release of their
@@ -40,6 +43,11 @@ const TDL_REPOSITORY: &str = "error-error-fruit-user/tdl";
 const DOOMIFY_REPOSITORY: &str = "error-error-fruit-user/doomify-waw";
 /// What the installed copy of this project is called.
 const NAME: &str = "nacht-des-schreckens";
+
+/// `doomify.py` and `doomify/**/*.toml`, as the repository had them when this was built.
+mod embedded {
+    include!(concat!(env!("OUT_DIR"), "/embedded.rs"));
+}
 
 /// A file to download: where from (the first that works), and what it must be.
 struct Download {
@@ -269,16 +277,16 @@ fn place_files(here: &Path, dir: &Path, home: &Path, scratch: &Scratch) -> Outco
         copy_whole(&here.join(pk3), &wads.join(pk3))?;
         println!("{pk3}: {}", wads.join(pk3).display());
     }
-    if here.join("doomify.py").is_file() {
-        copy_whole(&here.join("doomify.py"), &home.join("doomify.py"))?;
-    }
-    if here.join("doomify").is_dir() {
-        copy_tree(&here.join("doomify"), &home.join("doomify"))?;
+    for (inside, contents) in embedded::FILES {
+        write_text(&home.join(inside), contents)?;
     }
     let to = home
         .join("doomify")
         .join(if cfg!(windows) { "doomify-waw.exe" } else { "doomify-waw" });
-    get_tool(here, "doomify-waw", DOOMIFY_REPOSITORY, &to, scratch)?;
+    // Not fatal: without it doomify.py builds doomify-waw from its source (git and cargo)
+    if let Err(problem) = get_tool(here, "doomify-waw", DOOMIFY_REPOSITORY, &to, scratch) {
+        eprintln!("{problem}\ndoomify-waw wasn't installed, so doomify.py will try to build it from source (it needs git and cargo)");
+    }
     unpack_sprites(&here.join("nacht.pk3"), &home.join("nacht"))?;
     println!("doomify.py: {}", home.display());
     Ok(())
@@ -322,7 +330,21 @@ fn copy_whole(from: &Path, to: &Path) -> Outcome<()> {
     fs::rename(&part, to).map_err(problem)
 }
 
+/// Writes `contents` to `to`, by way of `<to>.part`.
+fn write_text(to: &Path, contents: &str) -> Outcome<()> {
+    let problem = |error: io::Error| format!("{}: {error}", to.display());
+    if let Some(parent) = to.parent() {
+        fs::create_dir_all(parent).map_err(problem)?;
+    }
+    let mut part = to.as_os_str().to_os_string();
+    part.push(".part");
+    let part = PathBuf::from(part);
+    fs::write(&part, contents).map_err(problem)?;
+    fs::rename(&part, to).map_err(problem)
+}
+
 /// Copies every file under `from` into `to`.
+#[cfg(test)]
 fn copy_tree(from: &Path, to: &Path) -> Outcome<()> {
     let problem = |error: io::Error| format!("{}: {error}", from.display());
     for entry in fs::read_dir(from).map_err(problem)? {
@@ -749,6 +771,15 @@ mod tests {
         fs::write(dir.join("blender-4.2.9-linux-x64").join(name), b"").unwrap();
         assert_eq!(blender_in(&dir), Some(dir.join("blender-4.2.9-linux-x64").join(name)));
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_settings_are_embedded() {
+        let names: Vec<_> = embedded::FILES.iter().map(|(name, _)| *name).collect();
+        assert!(names.contains(&"doomify.py"));
+        assert!(names.contains(&"doomify/doomify.toml"));
+        assert!(names.iter().any(|name| name.starts_with("doomify/weapons/")));
+        assert!(embedded::FILES.iter().all(|(_, contents)| !contents.is_empty()));
     }
 
     #[test]

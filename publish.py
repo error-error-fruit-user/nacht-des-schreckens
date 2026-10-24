@@ -6,7 +6,7 @@ usage: python3 publish.py [--out FILE] [--strict] [--no-library] [--no-appimages
 When Horde Hammer's repository is next to this one (../horde-hammer), it is packed too, into its own
 published/releases/ only, so its pk3 there always matches nacht (a library older than nacht stops UZDoom at
 startup with "unknown actor property"). --no-library skips that.
-With the default output, published/releases/ also gets a copy of horde-hammer.pk3 and of doomify.py.
+With the default output, published/releases/ also gets a copy of horde-hammer.pk3. (doomify.py and the doomify/ TOMLs are embedded in nacht-install, not published.)
 The nacht-waw/ folder is packed as published/artifacts/nacht-waw.pk3, outside that folder (when doomify.py has
 built it), so it never ships with the rest. nacht-waw is made from the player's own game: it is for
 them alone, never share it.
@@ -51,13 +51,9 @@ ARTIFACTS = os.path.join("published", "artifacts")
 # The library nacht runs on, packed alongside it when its repository is here
 LIBRARY = os.path.join("..", "horde-hammer")
 LIBRARY_PK3 = "horde-hammer.pk3"
-# Built by doomify.py, loaded after nacht; packed as a pk3 in published/ itself, outside OUT
+# Built by doomify.py, loaded after nacht; packed as a pk3 in ARTIFACTS, outside OUT
 WAW = "nacht-waw"
 WAW_NAME = "nacht-waw.pk3"
-# The script that builds WAW, copied into OUT
-DOOMIFY = "doomify.py"
-# Its settings and the weapon and sound TOMLs, copied into OUT under the same names
-DOOMIFY_FOLDER = "doomify"
 
 # 1980-01-01, the earliest time a zip can hold
 EPOCH = (1980, 1, 1, 0, 0, 0)
@@ -197,14 +193,6 @@ def main():
         if not options.no_library and os.path.isfile(library_pk3):
             shutil.copy(library_pk3, OUT)
             print(f"{os.path.join(OUT, LIBRARY_PK3)}: copied")
-        shutil.copy(DOOMIFY, OUT)
-        print(f"{os.path.join(OUT, DOOMIFY)}: copied")
-        tomls = [(path, os.path.join(OUT, path)) for path, _ in gather(DOOMIFY_FOLDER)
-                 if path.endswith(".toml")]
-        for path, copy in tomls:
-            os.makedirs(os.path.dirname(copy), exist_ok=True)
-            shutil.copy(path, copy)
-        print(f"{os.path.join(OUT, DOOMIFY_FOLDER)}/: {len(tomls)} TOMLs copied")
         if os.path.isdir(WAW):
             waw_target = os.path.join(ARTIFACTS, WAW_NAME)
             os.makedirs(ARTIFACTS, exist_ok=True)
