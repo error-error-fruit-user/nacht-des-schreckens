@@ -8,10 +8,12 @@ Run it before playing for the first time, and again after nacht's weapons change
   1. Start World at War and, in Zombies (solo), load Der Riese. Stay in the map.
   2. python3 doomify.py
 
-It needs Blender (blender.org), which renders the weapons. It runs doomify-waw: the executable in
-doomify/ for this system, or (with --source, or when there is none) doomify-waw built from its
-repository with Rust's cargo. Anything after the options goes to doomify-waw build (--help lists
-them: --force renders everything again, --blender PATH picks Blender).
+It needs Blender (blender.org), which renders the weapons. It runs doomify-waw: the one nacht-install
+put in doomify/, or doomify-waw on your PATH, or (with --source, or when there is neither)
+doomify-waw built from its repository with git and Rust's cargo, which it offers to install when
+they are missing and can all be installed at once. Released executables are on doomify-waw's
+GitHub releases. Anything after the options goes to doomify-waw build (--help lists them: --force
+renders everything again, --blender PATH picks Blender).
 
   python3 doomify.py [--source] [--pack] [-- doomify-waw build options]
 """
@@ -19,6 +21,7 @@ them: --force renders everything again, --blender PATH picks Blender).
 import argparse
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -31,6 +34,8 @@ REPOSITORIES = {
     "doomify-waw": "https://github.com/error-error-fruit-user/doomify-waw.git",
     "hell-hound": "https://github.com/error-error-fruit-user/hell-hound.git",
 }
+# The oldest Rust that builds them (their rust-version)
+RUST = (1, 88)
 
 
 def executable_name():
@@ -42,12 +47,79 @@ def run(command, **options):
     subprocess.run(command, check=True, **options)
 
 
+def installed():
+    """The doomify-waw nacht-install put in doomify/, or the one on the PATH; None without either."""
+    beside = os.path.join(FOLDER, executable_name())
+    return beside if os.path.isfile(beside) else shutil.which("doomify-waw")
+
+
+def rust_ok():
+    """Whether cargo is there and new enough for doomify-waw and hell-hound (RUST)."""
+    cargo = shutil.which("cargo")
+    if cargo is None:
+        return False
+    found = re.search(r"(\d+)\.(\d+)", subprocess.run([cargo, "--version"], capture_output=True,
+                                                    text=True).stdout)
+    return found is not None and (int(found[1]), int(found[2])) >= RUST
+
+
+def install_plan(missing_git, missing_rust):
+    """The commands that install everything missing in one go, or None when this system can't."""
+    commands = []
+    if missing_git:
+        managers = {
+            "apt-get": ["sudo", "apt-get", "install", "-y", "git"],
+            "dnf": ["sudo", "dnf", "install", "-y", "git"],
+            "pacman": ["sudo", "pacman", "-S", "--needed", "git"],
+            "zypper": ["sudo", "zypper", "install", "-y", "git"],
+            "brew": ["brew", "install", "git"],
+        }
+        manager = next((m for m in managers if shutil.which(m)), None)
+        if platform.system() == "Windows" or manager is None:
+            return None
+        commands.append(managers[manager])
+    if missing_rust:
+        if shutil.which("rustup"):
+            commands.append(["rustup", "update", "stable"])
+        elif platform.system() == "Windows" or shutil.which("curl") is None:
+            # rustup on Windows also needs Visual Studio's build tools: not one step
+            return None
+        else:
+            # rustup.rs's own installer: distributions' cargo is often older than doomify-waw needs
+            commands.append(["sh", "-c", "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs"
+                                         " | sh -s -- -y"])
+    return commands
+
+
+def get_tools():
+    """git and a new enough cargo, installed after asking when they can all be at once."""
+    missing_git = shutil.which("git") is None
+    missing_rust = not rust_ok()
+    if not missing_git and not missing_rust:
+        return
+    needed = (("git", missing_git), (f"Rust {RUST[0]}.{RUST[1]} or newer", missing_rust))
+    wanted = " and ".join(name for name, gone in needed if gone)
+    plan = install_plan(missing_git, missing_rust)
+    if plan is None or not sys.stdin.isatty():
+        sys.exit(f"Building doomify-waw needs {wanted}: install them (git-scm.com, rustup.rs) and run"
+                 " this again, or put doomify-waw from its GitHub releases in doomify/")
+    print(f"Building doomify-waw needs {wanted}, which these commands install:")
+    for command in plan:
+        print("  " + " ".join(command))
+    if input("Install them now? [y/N] ").strip().lower() not in ("y", "yes"):
+        sys.exit("Not installed: doomify-waw can't be built without them.")
+    for command in plan:
+        run(command)
+    # rustup's installer puts cargo in ~/.cargo/bin, which this shell's PATH may not have yet
+    os.environ["PATH"] += os.pathsep + os.path.join(os.path.expanduser("~"), ".cargo", "bin")
+    if shutil.which("git") is None or not rust_ok():
+        sys.exit(f"{wanted} still can't be found: open a new terminal and run this again.")
+
+
 def from_source():
     """doomify-waw built from its repository, cloned (or updated) into doomify/src with hell-hound,
     which it is built against, next to it."""
-    for tool in ("git", "cargo"):
-        if shutil.which(tool) is None:
-            sys.exit(f"Building doomify-waw needs {tool} (git-scm.com, rustup.rs)")
+    get_tools()
     sources = os.path.join(FOLDER, "src")
     os.makedirs(sources, exist_ok=True)
     for name, url in REPOSITORIES.items():
@@ -76,15 +148,15 @@ def pack():
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--source", action="store_true",
-                        help="build doomify-waw from its repository instead of using doomify/'s")
+                        help="build doomify-waw from its repository instead of using an installed one")
     parser.add_argument("--pack", action="store_true", help="also zip nacht-waw/ into nacht-waw.pk3")
     parser.add_argument("rest", nargs="*", help="options for doomify-waw build, after --")
     args = parser.parse_args()
 
-    executable = os.path.join(FOLDER, executable_name())
-    if args.source or not os.path.isfile(executable):
+    executable = None if args.source else installed()
+    if executable is None:
         if not args.source:
-            print(f"No {executable_name()} in doomify/ for this system: building it from source.")
+            print("No doomify-waw in doomify/ or on the PATH: building it from source.")
         executable = from_source()
     run([executable, "build", FOLDER, *args.rest])
     if args.pack:

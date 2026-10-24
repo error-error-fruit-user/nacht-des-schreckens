@@ -9,6 +9,9 @@ __pycache__/
 # Built by doomify.py from the player's own World at War: never shared
 /nacht-waw/
 /nacht-waw.pk3
-# doomify-waw and hell-hound, cloned and built by doomify.py --source
+# doomify-waw, put here by nacht-install (executables are only ever released, never committed),
+# and doomify-waw and hell-hound, cloned and built by doomify.py --source
+/doomify/doomify-waw
+/doomify/doomify-waw.exe
 /doomify/src/
 /installer/target

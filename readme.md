@@ -23,7 +23,7 @@ They aren't in this repository, because World at War's assets can't be shared. `
 1. Start World at War and, in Zombies, play Der Riese solo. Stay in the map.
 2. Run `python3 doomify.py` here (`python3 doomify.py --pack` also makes `nacht-waw.pk3`).
 
-It runs the `doomify-waw` executable in `doomify/`, or with `--source` builds it from its repository (that needs git and [Rust](https://rustup.rs)). `doomify/` also holds the weapons' settings: a TOML per weapon (`doomify/weapons/`), the zombies' sounds (`doomify/sounds/`) and `doomify/doomify.toml`. Then load the three, in this order:
+It runs the `doomify-waw` that `nacht-install` put in `doomify/` (or one from [its releases](https://github.com/error-error-fruit-user/doomify-waw/releases) put there or on your PATH); without one, or with `--source`, it builds it from its repository, which needs git and [Rust](https://rustup.rs) 1.88 or newer, and offers to install them when they can all be installed at once. `doomify/` also holds the weapons' settings: a TOML per weapon (`doomify/weapons/`), the zombies' sounds (`doomify/sounds/`) and `doomify/doomify.toml`. Then load the three, in this order:
 
 ```
 uzdoom -iwad doom2.wad -file horde-hammer.pk3 nacht.pk3 nacht-waw
