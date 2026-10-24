@@ -146,15 +146,10 @@ def plan(args):
             lines.append("  - build nacht-install into published/releases/: as an AppImage (needs "
                          "mksquashfs) and cross-built for Windows (Rust's x86_64-pc-windows-gnu target)")
     lines.append("  - run nacht-install from published/releases/, which:")
-    if WINDOWS:
-        user, system = (f"%LOCALAPPDATA%\\Programs\\{NAME}", f"%ProgramFiles%\\{NAME}")
-    else:
-        user, system = (f"~/.local/opt/{NAME}", f"/opt/{NAME}")
+    user = f"%LOCALAPPDATA%\\Programs\\{NAME}" if WINDOWS else f"~/.local/opt/{NAME}"
     lines.append({
         "in-place": "    - installs in published/releases/ itself (or --dir)",
         "user": f"    - installs in {user} (or --dir)",
-        "system": f"    - installs in {system} (or --dir), which needs "
-                  f"{'administrator' if WINDOWS else 'root: the installer runs with sudo'}",
     }[args.mode])
     art = ("artifacts/ in --dir" if args.dir else
            "published/artifacts/" if args.mode == "in-place" else "artifacts/ there")
@@ -198,7 +193,7 @@ def plan(args):
     lines.append("To change that, here or after the y: --no-build installs what is published already, "
                  "--source builds only for this machine, --no-tdl, --no-uzdoom, --no-freedoom, "
                  "--no-blender, --no-doomify and --no-song leave those out, --waw DIR says where World "
-                 "at War is, --blender PATH uses your Blender, --mode in-place|user|system and --dir "
+                 "at War is, --blender PATH uses your Blender, --mode in-place|user and --dir "
                  "say where, --desktop-shortcut and --menu-entry make shortcuts, --reinstall does it all again, and --computer-speak "
                  "speaks plainly.")
     return lines
@@ -266,7 +261,7 @@ def parser():
     build_how.add_argument("--source", action="store_true",
                            help="build the pk3s and nacht-install for this machine only")
     passed = flags.add_argument_group("passed to nacht-install")
-    passed.add_argument("--mode", choices=["in-place", "user", "system"], default="in-place")
+    passed.add_argument("--mode", choices=["in-place", "user"], default="in-place")
     passed.add_argument("--dir")
     for flag in ("--no-tdl", "--no-uzdoom", "--no-freedoom", "--no-blender", "--no-doomify",
                  "--no-song", "--desktop-shortcut", "--menu-entry"):
@@ -287,16 +282,13 @@ def main():
     flags = parser()
     args = flags.parse_args()
     groans.start(JOURNAL, args.computer_speak)
-    if as_root() and not args.no_build:
-        groans.note("run as root: refused to build")
-        sys.exit("Don't run this with sudo: building as root leaves files in published/ that only "
-                 "root can change. Run it as yourself; to install for everyone, it runs only the "
-                 "installer with sudo.")
+    if as_root():
+        groans.note("run as root: refused")
+        sys.exit("Don't run this with sudo: it builds and installs for you (or in place), and root "
+                 "would leave files in published/ and an install that only root can change.")
     args = ask(flags, args, plan)
     check_owner([os.path.join(HERE, "published"),
                  os.path.join(os.path.dirname(HERE), "horde-hammer", "published")])
-    groans.say("begin", "Publishing and installing Nacht des Schreckens",
-               what="Nacht des Schreckens", place=args.dir or RELEASES)
     build(args)
     groans.section("install")
     command = [installer(), "--accept", "--mode", args.mode]
@@ -311,11 +303,6 @@ def main():
                                       ("--reinstall", args.reinstall),
                                       ("--desktop-shortcut", args.desktop_shortcut),
                                       ("--menu-entry", args.menu_entry)) if on]
-    # 🔑 an install for everyone runs the installer alone with sudo
-    if args.mode == "system" and not WINDOWS and not as_root():
-        groans.note("running the installer with sudo")
-        command = ["sudo", "--preserve-env=GROANS_JOURNAL,GROANS_DEPTH,GROANS_VOICE,GROANS_COLOR,"
-                   "GROANS_SECTION,GROANS_CAPTURED", *command]
     groans.run(command, cwd=HERE, voiced=True)
 
 

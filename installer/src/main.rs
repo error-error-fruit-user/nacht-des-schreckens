@@ -18,8 +18,8 @@
 //! against a pinned hash, since the latest release isn't known when this is built; they come over
 //! HTTPS from the project's own releases.
 //!
-//! It asks (or `--mode` says) where to install: in place, for you or for everyone, like
-//! `tdl-install`. The payload goes in that folder: the pk3s, in `wads/` (a pool tdl offers).
+//! `--mode` says where to install: in place (the default) or for you, like `tdl-install`; nothing is
+//! installed for everyone, so it never needs root or an administrator, and it won't run as root. The payload goes in that folder: the pk3s, in `wads/` (a pool tdl offers).
 //! Everything else is an artifact, in `artifacts/` there (nacht's `published/artifacts/` when this
 //! runs in place from its `published/releases/`, or `--artifacts`): tdl with UZDoom and Freedoom 2,
 //! the `doomify` machinery in `nacht-des-schreckens/`, Blender (downloaded, checked against its
@@ -167,7 +167,7 @@ struct Cli {
     /// Goes ahead without asking, with the defaults for what isn't given (in place, no shortcuts)
     #[arg(long)]
     accept: bool,
-    /// Where to install: in place (next to this program), for you, or for everyone.
+    /// Where to install: in place (next to this program), or for you.
     #[arg(long, value_enum, default_value = "in-place")]
     mode: Mode,
     /// The folder to install into. Defaults to the one this program is in (in place) or the
@@ -246,8 +246,6 @@ enum Mode {
     InPlace,
     /// Copied into your own folder, with the `tdl` command on your PATH.
     User,
-    /// Copied into the system's folder, with the `tdl` command on everyone's PATH. Needs root.
-    System,
 }
 
 impl Mode {
@@ -255,7 +253,6 @@ impl Mode {
         match self {
             Mode::InPlace => "in-place",
             Mode::User => "user",
-            Mode::System => "system",
         }
     }
 }
@@ -302,11 +299,7 @@ fn plan(cli: &Cli, dir: &Path, art: &Path) -> Vec<String> {
         format!(
             "  - install Nacht des Schreckens in {}{}: horde-hammer.pk3 and nacht.pk3, the payload, in its wads/",
             dir.display(),
-            if cli.mode == Mode::System {
-                " (needs root)"
-            } else {
-                ""
-            }
+            ""
         ),
         format!(
             "  - put everything else, its artifacts, in {}: doomify.py with its settings, a doomify-waw, the loadout and its log",
@@ -381,7 +374,7 @@ fn plan(cli: &Cli, dir: &Path, art: &Path) -> Vec<String> {
     }
     lines.push(String::new());
     lines.push(
-        "To change that, here or after the y: --mode in-place|user|system, --dir and --artifacts say where, --no-tdl, --no-uzdoom, --no-freedoom, --no-blender, --no-song, --no-doomify and --no-play leave those out, --reinstall does everything again, --waw DIR and --blender PATH say where World at War and Blender are, --desktop-shortcut and --menu-entry make shortcuts, and --computer-speak speaks plainly."
+        "To change that, here or after the y: --mode in-place|user, --dir and --artifacts say where, --no-tdl, --no-uzdoom, --no-freedoom, --no-blender, --no-song, --no-doomify and --no-play leave those out, --reinstall does everything again, --waw DIR and --blender PATH say where World at War and Blender are, --desktop-shortcut and --menu-entry make shortcuts, and --computer-speak speaks plainly."
             .into(),
     );
     lines
@@ -413,9 +406,7 @@ fn run(mut cli: Cli) -> Outcome<()> {
     }
     let cli = &cli;
     let mode = cli.mode;
-    if mode == Mode::System {
-        check_privileges()?;
-    }
+    refuse_root()?;
     for pk3 in PK3S {
         if !here.join(pk3).is_file() {
             return Err(format!(
@@ -512,9 +503,6 @@ fn run(mut cli: Cli) -> Outcome<()> {
             cli.menu_entry,
         );
     }
-    say!(
-        "Nacht des Platzhalters (and Nacht des Schreckens, once doomify.py has made its weapons) are profiles in the install's loadout"
-    );
     journal::finish("Nacht des Schreckens");
     if let Some(tdl) = tdl {
         play(&tdl, &dir, &art, cli.no_play);
@@ -606,20 +594,9 @@ fn set_up_loadout(
         warn!("{problem}");
         return None;
     }
-    // 👤 run with sudo, it is set up for whoever ran it, in a loadout of theirs
-    let loadout = art.join("loadout");
-    let _ = fs::create_dir_all(&loadout);
-    journal::give_back(&loadout);
     let command = format!("tdl setup {}", setup.display());
-    let mut setup_command = as_the_user(&tdl);
-    setup_command.arg("setup").arg(&setup);
-    match journal::run(&mut setup_command, &command) {
+    match journal::run(Command::new(&tdl).arg("setup").arg(&setup), &command) {
         Ok(status) if status.success() => {
-            journal::tell(
-                "ran",
-                &[("command", &command)],
-                &format!("{command} is done"),
-            );
             for step in setting_up {
                 steps.finish(&step);
             }
@@ -633,19 +610,6 @@ fn set_up_loadout(
             warn!("Couldn't run {}: {error}", tdl.display());
             None
         }
-    }
-}
-
-/// `program`, to be run as the user who ran this with sudo when there is one (with their home),
-/// else as it is.
-fn as_the_user(program: &Path) -> Command {
-    match journal::sudo_user() {
-        Some((user, _)) => {
-            let mut command = Command::new("sudo");
-            command.args(["-u", &user, "-H", "--"]).arg(program);
-            command
-        }
-        None => Command::new(program),
     }
 }
 
@@ -663,10 +627,10 @@ fn fingerprint(files: &[PathBuf]) -> String {
 }
 
 /// Pulls `song` out of the player's World at War (`waw`, or the one in a Steam library) into
-/// `<dir>/songs/`, after its warning. Returns where it is, or `None` (said) when there is no game
+/// `<dir>/songs/` (its warning was in the plan). Returns where it is, or `None` (said) when there is no game
 /// or no song in it.
 fn pull_song(song: &Song, dir: &Path, waw: Option<&Path>) -> Option<PathBuf> {
-    say!("{}", song.warning);
+    note!("{}", song.warning);
     let Some(main) = world_at_war(waw) else {
         say!(
             "World at War wasn't found, so {} isn't tdl's song (--waw DIR says where it is)",
@@ -776,8 +740,7 @@ fn world_at_war(given: Option<&Path>) -> Option<PathBuf> {
             .map(|folder| folder.join("Steam"))
             .collect()
     } else {
-        // 👤 run with sudo, World at War is in the home of whoever ran it, not root's
-        let home = journal::home().unwrap_or_default();
+        let home = var("HOME").unwrap_or_default();
         [
             ".steam/steam",
             ".steam/debian-installation",
@@ -835,7 +798,7 @@ fn play(tdl: &Path, dir: &Path, art: &Path, no_play: bool) {
         &[("command", &command)],
         &format!("Opening tdl: {command}"),
     );
-    let opened = as_the_user(tdl)
+    let opened = Command::new(tdl)
         .arg("--session")
         .arg("--loadout")
         .arg(&loadout)
@@ -933,7 +896,6 @@ fn install_tdl(here: &Path, dir: &Path, mode: Mode, cli: &Cli, scratch: &Scratch
         )?;
         make_executable(&dir.join(if cfg!(windows) { "tdl.exe" } else { "tdl" }))?;
     }
-    journal::tell("run", &[("command", "tdl-install")], "Running tdl-install");
     journal::section("download");
     note!(
         "running {} --mode {} --dir {}",
@@ -1252,7 +1214,7 @@ fn ensure_blender(dir: &Path) -> Outcome<Option<PathBuf>> {
     let _ = fs::remove_dir_all(&folder);
     fs::rename(&part, &folder).map_err(|error| format!("{}: {error}", folder.display()))?;
     let found = blender_in(&folder).ok_or("Blender unpacked, but its executable isn't there")?;
-    say!("Blender: {}", found.display());
+    note!("Blender: {}", found.display());
     Ok(Some(found))
 }
 
@@ -1284,7 +1246,14 @@ fn unpack_zip(file: &Path, folder: &Path) -> Outcome<()> {
 /// `nacht-waw.pk3` in the wad pool. Nothing here is an error: the rest is installed, and the
 /// command to run later is printed.
 fn doomify(python: &OsString, home: &Path, dir: &Path, blender: Option<&Path>) -> bool {
-    let mut args: Vec<OsString> = vec!["doomify.py".into(), "--pack".into(), "--accept".into()];
+    // 📦 packed straight into the wad pool, one step rather than a pack and a copy
+    let packed = dir.join("wads").join("nacht-waw.pk3");
+    let mut args: Vec<OsString> = vec![
+        "doomify.py".into(),
+        "--pack-to".into(),
+        packed.clone().into(),
+        "--accept".into(),
+    ];
     if let Some(blender) = blender {
         args.extend(["--".into(), "--blender".into(), blender.into()]);
     }
@@ -1329,19 +1298,7 @@ fn doomify(python: &OsString, home: &Path, dir: &Path, blender: Option<&Path>) -
     command.args(&args).current_dir(home);
     journal::child(&mut command, true);
     match command.status() {
-        Ok(status) if status.success() => {
-            let pk3 = home.join("nacht-waw.pk3");
-            match copy_whole(&pk3, &dir.join("wads").join("nacht-waw.pk3")) {
-                Ok(()) => {
-                    say!("nacht-waw.pk3: {}", dir.join("wads").display());
-                    true
-                }
-                Err(problem) => {
-                    warn!("{problem}");
-                    false
-                }
-            }
-        }
+        Ok(status) if status.success() => packed.is_file(),
         Ok(status) => {
             warn!("doomify.py failed ({status}).");
             later();
@@ -1409,32 +1366,23 @@ fn install_dir(mode: Mode, here: &Path) -> Outcome<PathBuf> {
         (Mode::InPlace, _) => here.to_path_buf(),
         (Mode::User, true) => var("LOCALAPPDATA")?.join("Programs").join(NAME),
         (Mode::User, false) => var("HOME")?.join(".local").join("opt").join(NAME),
-        (Mode::System, true) => var("ProgramFiles")?.join(NAME),
-        (Mode::System, false) => PathBuf::from("/opt").join(NAME),
     })
 }
 
-/// A system install writes where only root can: says so before anything is done.
-fn check_privileges() -> Outcome<()> {
-    #[cfg(windows)]
-    let elevated = Command::new("net")
-        .args(["session"])
-        .output()
-        .map(|output| output.status.success())
-        .unwrap_or(false);
+/// Nacht is installed for whoever runs this, or in place: never as root, whose install nobody else
+/// could use or change (World at War, tdl's settings and the song would all be root's).
+fn refuse_root() -> Outcome<()> {
     #[cfg(not(windows))]
-    let elevated = Command::new("id")
-        .arg("-u")
-        .output()
-        .map(|output| output.stdout.trim_ascii() == b"0")
-        .unwrap_or(false);
-    if elevated {
-        Ok(())
-    } else if cfg!(windows) {
-        Err("Installing for everyone needs an administrator: run this from an elevated terminal, or choose \"for you\"".into())
-    } else {
-        Err("Installing for everyone needs root: run this with sudo, or choose \"for you\"".into())
+    {
+        let root = Command::new("id")
+            .arg("-u")
+            .output()
+            .is_ok_and(|output| output.stdout.trim_ascii() == b"0");
+        if root {
+            return Err("Don't run nacht-install as root (with sudo): it installs Nacht des Schreckens for you, or in place, and needs no root".into());
+        }
     }
+    Ok(())
 }
 
 /// Downloads `download` into the scratch folder from the first of its URLs that works, checking

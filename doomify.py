@@ -221,16 +221,21 @@ def from_source():
     return build(os.path.join(sources, "doomify-waw"))
 
 
-def pack():
-    """nacht-waw/ zipped into nacht-waw.pk3, for launchers that take only pk3s."""
-    target = OUTPUT + ".pk3"
+def pack(target=None):
+    """nacht-waw/ zipped into `target` (nacht-waw.pk3 beside it by default), for launchers that take
+    only pk3s, saying how far it has got every thousand files."""
+    target = target or OUTPUT + ".pk3"
+    files = [os.path.join(root, name) for root, _, names in sorted(os.walk(OUTPUT))
+             for name in sorted(names)]
+    groans.other(f"Packing {OUTPUT} into {target}")
+    os.makedirs(os.path.dirname(os.path.abspath(target)), exist_ok=True)
     with zipfile.ZipFile(target + ".part", "w", zipfile.ZIP_DEFLATED) as archive:
-        for root, _, files in sorted(os.walk(OUTPUT)):
-            for name in sorted(files):
-                path = os.path.join(root, name)
-                archive.write(path, os.path.relpath(path, OUTPUT).replace(os.sep, "/"))
+        for number, path in enumerate(files, 1):
+            archive.write(path, os.path.relpath(path, OUTPUT).replace(os.sep, "/"))
+            if number % 1000 == 0:
+                groans.other(f"Packed {number}/{len(files)} files")
     os.replace(target + ".part", target)
-    groans.built(target)
+    groans.built(target, len(files))
 
 
 def find_tdl():
@@ -276,6 +281,8 @@ def main():
                         help="never build doomify-waw (or install what building needs): use the one "
                              "in the artifacts or on the PATH")
     parser.add_argument("--pack", action="store_true", help="also zip nacht-waw/ into nacht-waw.pk3")
+    parser.add_argument("--pack-to", metavar="PK3",
+                        help="also zip nacht-waw/ into this pk3 (nacht-install's wad pool)")
     parser.add_argument("--computer-speak", action="store_true",
                         help="say what it does plainly and formally, rather than as a descent through hell")
     parser.add_argument("--no-setup", action="store_true",
@@ -308,10 +315,10 @@ def main():
         if not args.source:
             groans.other(f"note: no doomify-waw in {ARTIFACTS} or on the PATH: building it from source")
         executable = from_source()
-    groans.say("found", f"Using doomify-waw: {executable}", what="doomify-waw", place=executable)
+    groans.note(f"using doomify-waw: {executable}")
     groans.run([executable, "build", FOLDER, *args.rest])
-    if args.pack:
-        pack()
+    if args.pack or args.pack_to:
+        pack(args.pack_to)
     if not args.no_setup:
         set_up_schreckens()
     groans.other("Load nacht-waw after Horde Hammer and nacht, for example: "
