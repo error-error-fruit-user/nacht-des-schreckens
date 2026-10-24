@@ -199,23 +199,9 @@ def plan(args):
                  "--source builds only for this machine, --no-tdl, --no-uzdoom, --no-freedoom, "
                  "--no-blender, --no-doomify and --no-song leave those out, --waw DIR says where World "
                  "at War is, --blender PATH uses your Blender, --mode in-place|user|system and --dir "
-                 "say where, --desktop-shortcut and --menu-entry make shortcuts, and --computer-speak "
+                 "say where, --desktop-shortcut and --menu-entry make shortcuts, --reinstall does it all again, and --computer-speak "
                  "speaks plainly.")
     return lines
-
-
-def newest_source(checkout):
-    """When the newest file the checkout tracks (by git) was changed; 0 if it can't tell."""
-    listed = subprocess.run(["git", "-C", checkout, "ls-files", "-z"], capture_output=True)
-    if listed.returncode != 0:
-        return 0
-    newest = 0
-    for name in listed.stdout.decode(errors="replace").split("\0"):
-        try:
-            newest = max(newest, os.path.getmtime(os.path.join(checkout, name)))
-        except OSError:
-            pass
-    return newest
 
 
 def refresh_tools():
@@ -228,9 +214,7 @@ def refresh_tools():
         if not os.path.isfile(os.path.join(folder, "publish.py")):
             continue
         releases = [os.path.join(folder, "published", "releases", name + suffix) for name in programs]
-        built = min((os.path.getmtime(path) for path in releases if os.path.isfile(path)), default=0)
-        if all(os.path.isfile(path) for path in releases) and built >= max(
-                newest_source(os.path.join(workspace, checkout)) for checkout in checkouts):
+        if groans.up_to_date(releases, [os.path.join(workspace, checkout) for checkout in checkouts]):
             groans.note(f"{project}'s release is newer than its sources")
             continue
         check_owner([os.path.join(folder, "published")])
@@ -242,6 +226,11 @@ def build(args):
         return
     groans.section("build")
     refresh_tools()
+    if not args.reinstall and not args.source and groans.up_to_date([os.path.join(RELEASES, name) for name in ("nacht.pk3", "horde-hammer.pk3", "nacht-install" + (".exe" if WINDOWS else ".AppImage"))], [HERE, os.path.join(os.path.dirname(HERE), "horde-hammer")]):
+        groans.say("skip", "The release is newer than its sources: nothing to build "
+                   "(--reinstall builds it again)", what="Nacht des Schreckens's release", place=RELEASES)
+        return
+
     if args.source:
         groans.run([sys.executable, "publish.py", "--no-appimages"], cwd=HERE, voiced=True)
         groans.run(["cargo", "build", "--release"], cwd=os.path.join(HERE, "installer"))
@@ -284,6 +273,9 @@ def parser():
         passed.add_argument(flag, action="store_true")
     passed.add_argument("--blender", metavar="PATH")
     passed.add_argument("--waw", metavar="DIR")
+    flags.add_argument("--reinstall", action="store_true",
+                       help="build and install everything again, where a run picks up where the last "
+                            "one left off")
     flags.add_argument("--computer-speak", action="store_true",
                        help="say what it does plainly and formally, rather than as a descent through "
                             "hell (and have nacht-install do the same)")
@@ -316,6 +308,7 @@ def main():
                                       ("--no-blender", args.no_blender),
                                       ("--no-doomify", args.no_doomify),
                                       ("--no-song", args.no_song),
+                                      ("--reinstall", args.reinstall),
                                       ("--desktop-shortcut", args.desktop_shortcut),
                                       ("--menu-entry", args.menu_entry)) if on]
     # 🔑 an install for everyone runs the installer alone with sudo

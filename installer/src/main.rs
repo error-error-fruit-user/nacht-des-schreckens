@@ -32,6 +32,10 @@
 
 /// The journal and the voice: installation-groans' groans.rs, built in (see `build.rs`).
 #[macro_use]
+#[allow(
+    dead_code,
+    reason = "groans.rs serves every installer; each uses what it needs"
+)]
 mod journal {
     include!(concat!(env!("OUT_DIR"), "/groans/groans.rs"));
 }
@@ -202,6 +206,10 @@ struct Cli {
     /// The Blender doomify.py renders with, instead of finding or downloading one.
     #[arg(long, value_name = "PATH")]
     blender: Option<PathBuf>,
+    /// Does everything again, where a run picks up where the last one left off: tdl, the weapons,
+    /// the song (put back as tdl's though another was picked since) and the profiles
+    #[arg(long)]
+    reinstall: bool,
     /// Makes a shortcut on the desktop that opens tdl on the install's loadout, with the system's
     /// lock icon
     #[arg(long)]
@@ -332,7 +340,8 @@ fn plan(cli: &Cli, dir: &Path, art: &Path) -> Vec<String> {
         ),
         None => {}
     }
-    if !cli.no_song {
+    let steps = journal::Steps::open(art, cli.reinstall);
+    if !cli.no_song && !steps.done("song") {
         lines.push(format!("  - {}", SONG.warning));
     }
     if !cli.no_doomify {
@@ -359,9 +368,20 @@ fn plan(cli: &Cli, dir: &Path, art: &Path) -> Vec<String> {
             " and open tdl on it"
         }
     ));
+    let earlier: Vec<&str> = steps
+        .earlier()
+        .into_iter()
+        .filter(|step| !step.starts_with("profile ") && !step.starts_with("tdl-install"))
+        .collect();
+    if !earlier.is_empty() {
+        lines.push(format!(
+            "  - skip what an earlier run finished ({}), picking up where it left off (--reinstall does it all again)",
+            earlier.join(", ")
+        ));
+    }
     lines.push(String::new());
     lines.push(
-        "To change that, here or after the y: --mode in-place|user|system, --dir and --artifacts say where, --no-tdl, --no-uzdoom, --no-freedoom, --no-blender, --no-song, --no-doomify and --no-play leave those out, --waw DIR and --blender PATH say where World at War and Blender are, --desktop-shortcut and --menu-entry make shortcuts, and --computer-speak speaks plainly."
+        "To change that, here or after the y: --mode in-place|user|system, --dir and --artifacts say where, --no-tdl, --no-uzdoom, --no-freedoom, --no-blender, --no-song, --no-doomify and --no-play leave those out, --reinstall does everything again, --waw DIR and --blender PATH say where World at War and Blender are, --desktop-shortcut and --menu-entry make shortcuts, and --computer-speak speaks plainly."
             .into(),
     );
     lines
@@ -426,13 +446,20 @@ fn run(mut cli: Cli) -> Outcome<()> {
         cli.no_doomify,
     );
 
+    let mut steps = journal::Steps::open(&art, cli.reinstall);
     let scratch = Scratch::new();
+    let tdl_name = if cfg!(windows) { "tdl.exe" } else { "tdl" };
     if !cli.no_tdl {
-        install_tdl(&here, &art, mode, cli, &scratch)?;
+        if steps.done("tdl") && art.join(tdl_name).is_file() {
+            steps.skip("tdl", &art.display().to_string());
+        } else {
+            install_tdl(&here, &art, mode, cli, &scratch)?;
+            steps.finish("tdl");
+        }
     }
     let home = art.join(NAME);
     journal::section("install");
-    place_files(&here, &dir, &home, &scratch)?;
+    place_files(&here, &dir, &home, &scratch, cli.reinstall)?;
 
     let python = find_python();
     if python.is_none() {
@@ -447,18 +474,28 @@ fn run(mut cli: Cli) -> Outcome<()> {
         None => ensure_blender(&art)?,
     };
     note!("blender: {:?}", blender);
-    if !cli.no_doomify
+    let built = dir.join("wads").join("nacht-waw.pk3");
+    if !cli.no_doomify && steps.done("weapons") && built.is_file() {
+        journal::section("weapons");
+        steps.skip("nacht-waw.pk3", &built.display().to_string());
+    } else if !cli.no_doomify
         && let Some(python) = python
+        && doomify(&python, &home, &dir, blender.as_deref())
     {
-        doomify(&python, &home, &dir, blender.as_deref());
+        steps.finish("weapons");
     }
+    // 🎵 the song is pulled and made tdl's once: a song picked since then is left alone
     let song = if cli.no_song {
+        None
+    } else if steps.done("song") {
+        journal::section("song");
+        steps.skip(SONG.title, "tdl's song, picked once");
         None
     } else {
         journal::section("song");
         pull_song(&SONG, &art, cli.waw.as_deref())
     };
-    let tdl = set_up_loadout(&dir, &art, &home, song.as_deref());
+    let tdl = set_up_loadout(&dir, &art, &home, song.as_deref(), &mut steps);
     if let Some(tdl) = &tdl {
         let mut command = vec![tdl.display().to_string(), "--session".into()];
         command.extend([
@@ -490,7 +527,13 @@ fn run(mut cli: Cli) -> Outcome<()> {
 /// pool (`<dir>/wads`), and the tdl the install put in `art` (or the one on the PATH) runs
 /// `tdl setup` on it. Returns that tdl, or
 /// `None` (said) when there is none or the setup failed.
-fn set_up_loadout(dir: &Path, art: &Path, home: &Path, song: Option<&Path>) -> Option<PathBuf> {
+fn set_up_loadout(
+    dir: &Path,
+    art: &Path,
+    home: &Path,
+    song: Option<&Path>,
+    steps: &mut journal::Steps,
+) -> Option<PathBuf> {
     let name = if cfg!(windows) { "tdl.exe" } else { "tdl" };
     let tdl = Some(art.join(name))
         .filter(|tdl| tdl.is_file())
@@ -510,38 +553,76 @@ fn set_up_loadout(dir: &Path, art: &Path, home: &Path, song: Option<&Path>) -> O
     };
     let wads = dir.join("wads");
     let quoted = |path: &Path| format!("{:?}", path.display().to_string());
+    // 🧾 a profile is set up again only when its pk3s changed (so tdl takes their new hashes), the
+    // song only when it was just pulled
+    let platzhalters = [wads.join("horde-hammer.pk3"), wads.join("nacht.pk3")];
+    let schreckens = [
+        wads.join("horde-hammer.pk3"),
+        wads.join("nacht.pk3"),
+        wads.join("nacht-waw.pk3"),
+    ];
+    let platzhalters_step = format!(
+        "profile Nacht des Platzhalters {}",
+        fingerprint(&platzhalters)
+    );
+    let schreckens_step = format!("profile Nacht des Schreckens {}", fingerprint(&schreckens));
     let mut text = format!(
         "# The install's own loadout, and its profiles: what nacht-install keeps with `tdl setup`.\n\
-         loadout = {}\nremember_loadout = false\n{}\n\
-         [[profiles]]\nname = \"Nacht des Platzhalters\"\nwads = [{}, {}]\n",
+         loadout = {}\nremember_loadout = false\n",
         quoted(&art.join("loadout")),
-        song.map(|song| format!("song = {}\n", quoted(song)))
-            .unwrap_or_default(),
-        quoted(&wads.join("horde-hammer.pk3")),
-        quoted(&wads.join("nacht.pk3")),
     );
-    if wads.join("nacht-waw.pk3").is_file() {
+    let mut setting_up = Vec::new();
+    if let Some(song) = song {
+        text.push_str(&format!("song = {}\n", quoted(song)));
+        setting_up.push("song".to_string());
+    }
+    if !steps.done(&platzhalters_step) {
+        text.push_str(&format!(
+            "\n[[profiles]]\nname = \"Nacht des Platzhalters\"\nwads = [{}, {}]\n",
+            quoted(&platzhalters[0]),
+            quoted(&platzhalters[1]),
+        ));
+        setting_up.push(platzhalters_step.clone());
+    }
+    if schreckens[2].is_file() && !steps.done(&schreckens_step) {
         text.push_str(&format!(
             "\n[[profiles]]\nname = \"Nacht des Schreckens\"\nplace = 1\nwads = [{}, {}, {}]\n",
-            quoted(&wads.join("horde-hammer.pk3")),
-            quoted(&wads.join("nacht.pk3")),
-            quoted(&wads.join("nacht-waw.pk3")),
+            quoted(&schreckens[0]),
+            quoted(&schreckens[1]),
+            quoted(&schreckens[2]),
         ));
+        setting_up.push(schreckens_step.clone());
+    }
+    journal::section("setup");
+    if setting_up.is_empty() {
+        steps.skip(
+            "The install's loadout",
+            &art.join("loadout").display().to_string(),
+        );
+        return Some(tdl);
     }
     let setup = home.join("setup.toml");
     if let Err(problem) = write_text(&setup, &text) {
         warn!("{problem}");
         return None;
     }
-    journal::section("setup");
+    // 👤 run with sudo, it is set up for whoever ran it, in a loadout of theirs
+    let loadout = art.join("loadout");
+    let _ = fs::create_dir_all(&loadout);
+    journal::give_back(&loadout);
     let command = format!("tdl setup {}", setup.display());
-    match journal::run(Command::new(&tdl).arg("setup").arg(&setup), &command) {
+    let mut setup_command = as_the_user(&tdl);
+    setup_command.arg("setup").arg(&setup);
+    match journal::run(&mut setup_command, &command) {
         Ok(status) if status.success() => {
             journal::tell(
                 "ran",
                 &[("command", &command)],
                 &format!("{command} is done"),
             );
+            for step in setting_up {
+                steps.finish(&step);
+            }
             Some(tdl)
         }
         Ok(status) => {
@@ -553,6 +634,32 @@ fn set_up_loadout(dir: &Path, art: &Path, home: &Path, song: Option<&Path>) -> O
             None
         }
     }
+}
+
+/// `program`, to be run as the user who ran this with sudo when there is one (with their home),
+/// else as it is.
+fn as_the_user(program: &Path) -> Command {
+    match journal::sudo_user() {
+        Some((user, _)) => {
+            let mut command = Command::new("sudo");
+            command.args(["-u", &user, "-H", "--"]).arg(program);
+            command
+        }
+        None => Command::new(program),
+    }
+}
+
+/// A short mark of what `files` hold (an FNV-1a hash of their bytes), so a step done with them is
+/// done again when they change.
+fn fingerprint(files: &[PathBuf]) -> String {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for file in files {
+        for byte in fs::read(file).unwrap_or_default() {
+            hash = (hash ^ byte as u64).wrapping_mul(0x100_0000_01b3);
+        }
+        hash = (hash ^ 0xff).wrapping_mul(0x100_0000_01b3);
+    }
+    format!("{hash:016x}")
 }
 
 /// Pulls `song` out of the player's World at War (`waw`, or the one in a Steam library) into
@@ -669,7 +776,8 @@ fn world_at_war(given: Option<&Path>) -> Option<PathBuf> {
             .map(|folder| folder.join("Steam"))
             .collect()
     } else {
-        let home = var("HOME").unwrap_or_default();
+        // 👤 run with sudo, World at War is in the home of whoever ran it, not root's
+        let home = journal::home().unwrap_or_default();
         [
             ".steam/steam",
             ".steam/debian-installation",
@@ -727,7 +835,7 @@ fn play(tdl: &Path, dir: &Path, art: &Path, no_play: bool) {
         &[("command", &command)],
         &format!("Opening tdl: {command}"),
     );
-    let opened = Command::new(tdl)
+    let opened = as_the_user(tdl)
         .arg("--session")
         .arg("--loadout")
         .arg(&loadout)
@@ -852,6 +960,9 @@ fn install_tdl(here: &Path, dir: &Path, mode: Mode, cli: &Cli, scratch: &Scratch
     if cli.no_uzdoom {
         command.arg("--no-uzdoom");
     }
+    if cli.reinstall {
+        command.arg("--reinstall");
+    }
     if cli.no_freedoom {
         command.arg("--no-freedoom");
     }
@@ -868,7 +979,13 @@ fn install_tdl(here: &Path, dir: &Path, mode: Mode, cli: &Cli, scratch: &Scratch
 
 /// Puts the pk3s in `<dir>/wads/` and the doomify machinery in `home`: doomify.py, its settings,
 /// doomify-waw and the sprites of nacht.pk3, which doomify-waw reads to avoid their names.
-fn place_files(here: &Path, dir: &Path, home: &Path, scratch: &Scratch) -> Outcome<()> {
+fn place_files(
+    here: &Path,
+    dir: &Path,
+    home: &Path,
+    scratch: &Scratch,
+    reinstall: bool,
+) -> Outcome<()> {
     let wads = dir.join("wads");
     for pk3 in PK3S {
         copy_whole(&here.join(pk3), &wads.join(pk3))?;
@@ -903,7 +1020,16 @@ fn place_files(here: &Path, dir: &Path, home: &Path, scratch: &Scratch) -> Outco
         "doomify-waw"
     });
     // Not fatal: without it doomify.py builds doomify-waw from its source (git and cargo)
-    if let Err(problem) = get_tool(here, "doomify-waw", DOOMIFY_REPOSITORY, &to, scratch) {
+    if to.is_file() && !reinstall {
+        journal::tell(
+            "skip",
+            &[
+                ("what", "doomify-waw"),
+                ("place", &to.display().to_string()),
+            ],
+            &format!("doomify-waw is there already: {}", to.display()),
+        );
+    } else if let Err(problem) = get_tool(here, "doomify-waw", DOOMIFY_REPOSITORY, &to, scratch) {
         warn!(
             "{problem}\ndoomify-waw wasn't installed, so doomify.py will try to build it from source (it needs git and cargo)"
         );
@@ -1157,8 +1283,8 @@ fn unpack_zip(file: &Path, folder: &Path) -> Outcome<()> {
 /// Runs doomify.py in `home` when World at War is running, then puts the packed
 /// `nacht-waw.pk3` in the wad pool. Nothing here is an error: the rest is installed, and the
 /// command to run later is printed.
-fn doomify(python: &OsString, home: &Path, dir: &Path, blender: Option<&Path>) {
-    let mut args: Vec<OsString> = vec!["doomify.py".into(), "--pack".into()];
+fn doomify(python: &OsString, home: &Path, dir: &Path, blender: Option<&Path>) -> bool {
+    let mut args: Vec<OsString> = vec!["doomify.py".into(), "--pack".into(), "--accept".into()];
     if let Some(blender) = blender {
         args.extend(["--".into(), "--blender".into(), blender.into()]);
     }
@@ -1179,7 +1305,7 @@ fn doomify(python: &OsString, home: &Path, dir: &Path, blender: Option<&Path>) {
             ],
             &format!("World at War isn't running, so nacht-waw isn't built. {later}"),
         );
-        return;
+        return false;
     }
     journal::tell(
         "detected",
@@ -1206,17 +1332,25 @@ fn doomify(python: &OsString, home: &Path, dir: &Path, blender: Option<&Path>) {
         Ok(status) if status.success() => {
             let pk3 = home.join("nacht-waw.pk3");
             match copy_whole(&pk3, &dir.join("wads").join("nacht-waw.pk3")) {
-                Ok(()) => say!("nacht-waw.pk3: {}", dir.join("wads").display()),
-                Err(problem) => warn!("{problem}"),
+                Ok(()) => {
+                    say!("nacht-waw.pk3: {}", dir.join("wads").display());
+                    true
+                }
+                Err(problem) => {
+                    warn!("{problem}");
+                    false
+                }
             }
         }
         Ok(status) => {
             warn!("doomify.py failed ({status}).");
             later();
+            false
         }
         Err(error) => {
             warn!("Couldn't run doomify.py: {error}");
             later();
+            false
         }
     }
 }
