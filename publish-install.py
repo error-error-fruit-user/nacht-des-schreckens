@@ -11,7 +11,7 @@ and nacht-install for this machine only (cargo build --release), or with --no-bu
 all; and runs the nacht-install in published/releases/, which installs the pk3s, tdl and Blender
 where it is asked to (--mode) and offers to run doomify.py. --mode, --dir, --yes, --no-tdl,
 --no-uzdoom, --no-freedoom, --no-blender, --no-doomify, --no-song, --waw and --blender go to nacht-install (see its
---help). Right after the warning it asks whether to make a Nacht des Schreckens shortcut (the app
+--help). Once it may go ahead, it asks whether to make a Nacht des Schreckens shortcut (the app
 menu and the desktop, or the Start menu and the desktop on Windows) with the system's lock icon,
 opening the install's tdl on its loadout; --no-shortcuts makes none without asking.
 
@@ -193,7 +193,7 @@ def agreed(accept):
     if not sys.stdin.isatty():
         note("no one to ask, and no --accept: nothing was done")
         sys.exit("There is no one to ask, so nothing was done: pass --accept to go ahead.")
-    answer = input("Go ahead? [y/N] ").strip()
+    answer = input("Are you sure? [y/N] ").strip()
     note(f"asked to go ahead, the answer was {answer!r}")
     return answer.lower() in ("y", "yes")
 
@@ -221,7 +221,7 @@ def shortcut_places():
 
 
 def wants_shortcuts(args, what):
-    """Asks, right after the warning, whether to make shortcuts for `what` (--no-shortcuts: no,
+    """Asks, once it may go ahead, whether to make shortcuts for `what` (--no-shortcuts: no,
     without asking)."""
     if args.no_shortcuts:
         note("--no-shortcuts: no shortcuts, and no question about them")
@@ -572,10 +572,10 @@ def main():
     refuse_root_build(args)
 
     warning(plan(args))
-    shortcuts = wants_shortcuts(args, "Nacht des Schreckens")
     if not agreed(args.accept):
         note("not going ahead: nothing was done")
         sys.exit("Nothing was done.")
+    shortcuts = wants_shortcuts(args, "Nacht des Schreckens")
     check_owner([folder for folder in (os.path.normpath(os.path.join(HERE, "published")), os.path.normpath(os.path.join(HERE, "../horde-hammer/published")),) if os.path.isdir(folder)])
     tell("begin", f"Publishing and installing {WHAT}", what=WHAT, place=os.path.join(HERE, "published"))
     ask_mode(args)
