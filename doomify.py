@@ -20,7 +20,10 @@ renders everything again, --blender PATH picks Blender).
 
   python3 doomify.py [--source | --no-build] [--pack] [--computer-speak] [-- doomify-waw build options]
 
-Before installing anything it says, under a red warning, exactly what will run, and asks.
+Before installing anything it says, under a red warning, exactly what will run, and asks once:
+"Are you sure? [y/n]" (--accept installs without asking; run by nacht-install, whose own question
+covers it, it never asks). It speaks in a voice from installation-groans (its submodule here, or
+beside nacht-install's copy), Toiling Through Hell unless --computer-speak.
 --no-build never builds doomify-waw (nor installs what building needs): it uses the one in its
 artifacts or on the PATH. Everything it makes but the weapons (doomify-waw built from source, its
 sources, its journal) goes in its artifacts.
@@ -33,11 +36,11 @@ import re
 import shutil
 import subprocess
 import sys
-import textwrap
-import time
 import zipfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+# --accept: what building needs is installed without asking (nacht-install's one question covers it)
+ACCEPT = False
 # The folder holding this project and its neighbours, whose checkouts come before any download
 WORKSPACE = os.path.dirname(HERE)
 FOLDER = os.path.join(HERE, "doomify")
@@ -55,111 +58,36 @@ REPOSITORIES = {
 RUST = (1, 88)
 
 
-# The journal: everything this does, with the time since it began (what it plans and is told,
-# every command and all it prints, every file it puts somewhere), added to JOURNAL on each run.
-JOURNAL = os.path.join(ARTIFACTS, "doomify.log")
-BEGAN = time.monotonic()
-# Blender's line for every frame it renders, which would bury the rest
-CHATTER = ("Fra:", "Saved:", "Time:", "Read blend")
+GROANS_GITHUB = "https://raw.githubusercontent.com/error-error-fruit-user/installation-groans/main/"
 
 
-def note(line):
-    """Writes `line` down in the journal."""
-    os.makedirs(os.path.dirname(JOURNAL), exist_ok=True)
-    with open(JOURNAL, "a", encoding="utf-8") as journal:
-        for part in line.splitlines() or [""]:
-            journal.write(f"[{time.monotonic() - BEGAN:8.3f}s] {part}\n")
-
-
-# The voice it speaks in, from installation-groans: the workspace's checkout beside nacht, else the
-# groans/ folder nacht-install put beside this, else GitHub. Toiling Through Hell unless told
-# --computer-speak; without one (or Python older than 3.11, which can't read TOML), plain lines.
-GROANS = "https://raw.githubusercontent.com/error-error-fruit-user/installation-groans/main/"
-VOICE = {}
-
-
-def speak_in(name):
-    """Speaks in the installation-groans voice `name` (a file name) from now on, if it is found."""
-    global VOICE
-    try:
-        import tomllib
-    except ImportError:
-        return
-    text = None
-    for folder in (os.path.join(WORKSPACE, "installation-groans"), os.path.join(HERE, "groans")):
-        path = os.path.join(folder, name)
-        if os.path.isfile(path):
-            with open(path, encoding="utf-8") as source:
-                text = source.read()
-            break
-    if text is None:
+def load_groans():
+    """installation-groans' groans.py, which this speaks through: this checkout's installation-groans
+    submodule, the workspace's checkout beside it, the groans/ folder nacht-install puts beside this
+    copy, or one fetched from its GitHub into the artifacts."""
+    places = [os.path.join(HERE, "installation-groans"), os.path.join(WORKSPACE, "installation-groans"),
+              os.path.join(HERE, "groans"), os.path.join(ARTIFACTS, "groans")]
+    folder = next((place for place in places if os.path.isfile(os.path.join(place, "groans.py"))), None)
+    if folder is None:
+        folder = places[-1]
         try:
             import urllib.request
-            with urllib.request.urlopen(GROANS + name, timeout=5) as answer:
-                text = answer.read().decode()
-        except Exception:
-            return
-    try:
-        VOICE = tomllib.loads(text)
-    except Exception:
-        VOICE = {}
+            os.makedirs(folder, exist_ok=True)
+            for name in ("groans.py", "toiling-through-hell.toml", "computer-speak.toml"):
+                with urllib.request.urlopen(GROANS_GITHUB + name, timeout=10) as answer:
+                    with open(os.path.join(folder, name), "wb") as out:
+                        out.write(answer.read())
+        except Exception as error:
+            sys.exit(f"installation-groans couldn't be found or fetched ({error}): run "
+                     "git submodule update --init beside this script.")
+    if folder not in sys.path:
+        sys.path.insert(0, folder)
+    import groans
+    return groans
 
 
-def tell(event, plain, **fills):
-    """Says `event` as one of the voice's phrases for it, picked at random and filled from `fills`,
-    or `plain` without one; the journal keeps the plain line either way. Now and then the voice
-    interjects (its [interjection])."""
-    import random
-    phrases = VOICE.get("phrases", {}).get(event) or []
-    if not phrases:
-        print(plain, flush=True)
-        note(plain)
-        return
-    said = random.choice(phrases)
-    for name, value in fills.items():
-        said = said.replace("{" + name + "}", str(value))
-    said = said[:1].upper() + said[1:]
-    print(said, flush=True)
-    note(f"{said}  ({plain})")
-    interjection = VOICE.get("interjection", {})
-    if interjection.get("phrases") and random.random() < float(interjection.get("chance", 0)):
-        colors = {"yellow": 33, "green": 32, "blue": 34, "magenta": 35, "cyan": 36, "white": 37}
-        code = colors.get(interjection.get("color", "red"), 31)
-        shout = random.choice(interjection["phrases"])
-        tty = sys.stdout.isatty() and "NO_COLOR" not in os.environ
-        print(f"\033[1;{code}m{shout}\033[0m" if tty else shout, flush=True)
-        note(shout)
-
-
-def run(command, cwd=HERE):
-    """Runs `command`, its output shown as it comes (prompts included) and written down, with how it
-    ended. Raises CalledProcessError if it failed."""
-    shown = " ".join(str(part) for part in command)
-    tell("run", f"+ {shown}", command=shown)
-    note(f"  (in {cwd})")
-    process = subprocess.Popen(command, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    pending, quiet = b"", 0
-    while True:
-        chunk = process.stdout.read1(4096)
-        if not chunk:
-            break
-        sys.stdout.buffer.write(chunk)
-        sys.stdout.buffer.flush()
-        *lines, pending = (pending + chunk).split(b"\n")
-        for line in lines:
-            text = line.decode(errors="replace").rstrip("\r")
-            if text.startswith(CHATTER):
-                quiet += 1
-            else:
-                note("  | " + text)
-    if pending:
-        note("  | " + pending.decode(errors="replace"))
-    code = process.wait()
-    if quiet:
-        note(f"  ({quiet} lines of Blender's frame by frame progress left out)")
-    note(f"  ended with code {code}")
-    if code:
-        raise subprocess.CalledProcessError(code, command)
+groans = load_groans()
+JOURNAL = os.path.join(ARTIFACTS, "doomify.log")
 
 
 def executable_name():
@@ -224,24 +152,6 @@ def install_plan(missing_git, missing_rust):
     return commands
 
 
-def warning(lines):
-    """`lines` under a red '--- Warning ---' (plain where the output isn't a terminal)."""
-    if platform.system() == "Windows":
-        os.system("")  # lets the Windows console show colors
-    color = sys.stdout.isatty() and "NO_COLOR" not in os.environ
-    print("\033[31m--- Warning ---\033[0m" if color else "--- Warning ---")
-    note("--- Warning ---")
-    for line in lines:
-        note(line)
-    width = min(shutil.get_terminal_size().columns, 100)
-    for line in lines:
-        # a step's later lines line up under its text
-        hang = len(line) - len(line.lstrip(" -"))
-        print(textwrap.fill(line, width, subsequent_indent=" " * hang,
-                            break_on_hyphens=False, break_long_words=False) if line else "")
-    print()
-
-
 def explain(command):
     """What one of install_plan's commands does, in words."""
     if command[0] == "rustup":
@@ -265,19 +175,17 @@ def get_tools(git=True):
     needed = (("git", missing_git), (f"Rust {RUST[0]}.{RUST[1]} or newer", missing_rust))
     wanted = " and ".join(name for name, gone in needed if gone)
     plan = install_plan(missing_git, missing_rust)
-    if plan is None or not sys.stdin.isatty():
+    if plan is None:
         sys.exit(f"Building doomify-waw needs {wanted}: install them (git-scm.com, rustup.rs) and run"
                  f" this again, or put doomify-waw from its GitHub releases in {ARTIFACTS}")
-    warning([f"Building doomify-waw needs {wanted}. Saying yes will run:"]
-            + [f"  - {' '.join(command)}: {explain(command)}" for command in plan]
-            + ["", "To skip this: install them yourself, or pass --no-build to use only a "
-                   f"doomify-waw that is already in {ARTIFACTS} or on your PATH."])
-    answer = input("Install them now? [y/n] ").strip()
-    note(f"asked to install {wanted}, the answer was {answer!r}")
-    if answer.lower() not in ("y", "yes"):
-        sys.exit("Not installed: doomify-waw can't be built without them.")
+    groans.warning([f"Building doomify-waw needs {wanted}. Saying yes will run:"]
+                   + [f"  - {' '.join(command)}: {explain(command)}" for command in plan]
+                   + ["", "To skip this: install them yourself, or pass --no-build to use only a "
+                          f"doomify-waw that is already in {ARTIFACTS} or on your PATH."])
+    if groans.confirm(ACCEPT) is None:
+        groans.declined()
     for command in plan:
-        run(command)
+        groans.run(command)
     # rustup's installer puts cargo in ~/.cargo/bin, which this shell's PATH may not have yet
     os.environ["PATH"] += os.pathsep + os.path.join(os.path.expanduser("~"), ".cargo", "bin")
     if shutil.which("git") is None or not rust_ok():
@@ -294,7 +202,7 @@ def workspace_project():
 
 def build(project):
     """doomify-waw built in the checkout `project`."""
-    run(["cargo", "build", "--release", "--manifest-path", os.path.join(project, "Cargo.toml")])
+    groans.run(["cargo", "build", "--release", "--manifest-path", os.path.join(project, "Cargo.toml")])
     return os.path.join(project, "target", "release", executable_name())
 
 
@@ -307,9 +215,9 @@ def from_source():
     for name, url in REPOSITORIES.items():
         path = os.path.join(sources, name)
         if os.path.isdir(os.path.join(path, ".git")):
-            run(["git", "-C", path, "pull", "--ff-only"])
+            groans.run(["git", "-C", path, "pull", "--ff-only"])
         else:
-            run(["git", "clone", "--depth", "1", url, path])
+            groans.run(["git", "clone", "--depth", "1", url, path])
     return build(os.path.join(sources, "doomify-waw"))
 
 
@@ -322,8 +230,7 @@ def pack():
                 path = os.path.join(root, name)
                 archive.write(path, os.path.relpath(path, OUTPUT).replace(os.sep, "/"))
     os.replace(target + ".part", target)
-    note(f"packed {OUTPUT} into {target}")
-    print("Packed", target)
+    groans.built(target)
 
 
 def find_tdl():
@@ -344,23 +251,20 @@ def set_up_schreckens():
     setup = os.path.join(HERE, "setup-waw.toml")
     tdl = find_tdl()
     if not os.path.isfile(setup) or tdl is None:
-        note(f"no Nacht des Schreckens profile: setup-waw.toml there {os.path.isfile(setup)}, tdl {tdl}")
+        groans.note(f"no Nacht des Schreckens profile: setup-waw.toml there {os.path.isfile(setup)}, "
+                    f"tdl {tdl}")
         return
+    groans.section("setup")
     try:
-        run([tdl, "setup", setup])
+        groans.run([tdl, "setup", setup])
     except subprocess.CalledProcessError as error:
-        print(f"note: tdl setup setup-waw.toml failed ({error.returncode})", file=sys.stderr)
+        groans.other(f"note: tdl setup setup-waw.toml failed ({error.returncode})", sys.stderr)
         return
-    color = sys.stdout.isatty() and "NO_COLOR" not in os.environ
-    loud = "\033[1;31m" if color else ""
-    plain = "\033[0m" if color else ""
     loadout = os.path.join(HERE, "published", "artifacts", "loadout")
-    print()
-    print(f"{loud}--- Nacht des Schreckens is ready to play ---{plain}")
-    print("Der Riese's weapons, rebuilt from your own World at War, in nacht's loadout:")
-    print(f"  {tdl} --loadout {loadout} launch \"Nacht des Schreckens\"")
-    print()
-    note("set up the Nacht des Schreckens profile")
+    command = f'{tdl} --loadout {loadout} launch "Nacht des Schreckens"'
+    groans.section("play")
+    groans.say("ready", f"Nacht des Schreckens is ready to play: {command}",
+               what="Nacht des Schreckens", command=command)
 
 
 def main():
@@ -377,44 +281,53 @@ def main():
     parser.add_argument("--no-setup", action="store_true",
                         help="don't set up the Nacht des Schreckens profile (setup-waw.toml)")
     parser.add_argument("rest", nargs="*", help="options for doomify-waw build, after --")
+    parser.add_argument("--accept", action="store_true",
+                        help="install what building doomify-waw needs without asking")
     args = parser.parse_args()
-    note(f"=== doomify.py {' '.join(sys.argv[1:])} ===")
-    speak_in("computer-speak.toml" if args.computer_speak else "toiling-through-hell.toml")
-    tell("begin", "Rebuilding Nacht des Schreckens' World at War weapons", what="Der Riese's weapons",
-         place=OUTPUT)
+    global ACCEPT
+    ACCEPT = args.accept
+    groans.start(JOURNAL, args.computer_speak)
+    groans.say("begin", "Rebuilding Nacht des Schreckens' World at War weapons",
+               what="Der Riese's weapons", place=OUTPUT)
+    groans.section("weapons")
 
     workspace = None if args.no_build else workspace_project()
-    note(f"workspace doomify-waw: {workspace}; installed one: {installed()}")
+    groans.note(f"workspace doomify-waw: {workspace}; installed one: {installed()}")
     if args.no_build:
         executable = installed()
         if executable is None:
             sys.exit(f"--no-build: there is no doomify-waw in {ARTIFACTS} or on the PATH")
     elif workspace is not None:
-        print(f"Building doomify-waw from the workspace: {workspace}")
+        groans.say("found", f"Building doomify-waw from the workspace: {workspace}",
+                   what="the workspace's doomify-waw", place=workspace)
         get_tools(git=False)
         executable = build(workspace)
     else:
         executable = None if args.source else installed()
     if executable is None:
         if not args.source:
-            print(f"No doomify-waw in {ARTIFACTS} or on the PATH: building it from source.")
+            groans.other(f"note: no doomify-waw in {ARTIFACTS} or on the PATH: building it from source")
         executable = from_source()
-    tell("found", f"Using doomify-waw: {executable}", what="doomify-waw", place=executable)
-    run([executable, "build", FOLDER, *args.rest])
+    groans.say("found", f"Using doomify-waw: {executable}", what="doomify-waw", place=executable)
+    groans.run([executable, "build", FOLDER, *args.rest])
     if args.pack:
         pack()
     if not args.no_setup:
         set_up_schreckens()
-    print("\nDone. Load nacht-waw after Horde Hammer and nacht, for example:")
-    print("  uzdoom -iwad freedoom2.wad -file horde-hammer.pk3 nacht nacht-waw")
+    groans.other("Load nacht-waw after Horde Hammer and nacht, for example: "
+                 "uzdoom -iwad freedoom2.wad -file horde-hammer.pk3 nacht nacht-waw")
 
 
 if __name__ == "__main__":
     try:
         main()
-        tell("done", "Done.", what="Der Riese's weapons")
     except subprocess.CalledProcessError as error:
-        tell("problem", f"doomify failed: {error}", problem=error)
-        tell("journal", f"What it did is in {JOURNAL}", place=JOURNAL)
+        groans.finish("Der Riese's weapons", ok=False,
+                      error=f"{' '.join(map(str, error.cmd))} ended with code {error.returncode}")
         sys.exit(1)
-    tell("journal", f"What it did is in {JOURNAL}", place=JOURNAL)
+    except SystemExit as stop:
+        if isinstance(stop.code, str):
+            groans.say("problem", stop.code, problem=stop.code)
+            sys.exit(1)
+        raise
+    groans.finish("Der Riese's weapons")

@@ -27,6 +27,39 @@ import zlib
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
+
+GROANS_GITHUB = "https://raw.githubusercontent.com/error-error-fruit-user/installation-groans/main/"
+
+
+def load_groans():
+    """installation-groans' groans.py, which these scripts speak through: the project's
+    installation-groans submodule, else the workspace's checkout beside the project, else a copy
+    fetched from its GitHub into published/artifacts/groans/."""
+    project = ROOT
+    places = [os.path.join(project, "installation-groans"),
+              os.path.join(os.path.dirname(project), "installation-groans"),
+              os.path.join(project, "published", "artifacts", "groans")]
+    folder = next((place for place in places if os.path.isfile(os.path.join(place, "groans.py"))), None)
+    if folder is None:
+        folder = places[-1]
+        try:
+            import urllib.request
+            os.makedirs(folder, exist_ok=True)
+            for name in ("groans.py", "toiling-through-hell.toml", "computer-speak.toml"):
+                with urllib.request.urlopen(GROANS_GITHUB + name, timeout=10) as answer:
+                    with open(os.path.join(folder, name), "wb") as out:
+                        out.write(answer.read())
+        except Exception as error:
+            sys.exit(f"installation-groans isn't beside {os.path.basename(project)}, and couldn't be "
+                     f"fetched ({error}): clone it beside it.")
+    if folder not in sys.path:
+        sys.path.insert(0, folder)
+    import groans
+    return groans
+
+
+groans = load_groans()
+
 RUNTIME = os.path.join(ROOT, "secrets", "appimage", "runtime-x86_64")
 # The target the Windows executables are cross-built for
 WINDOWS = "x86_64-pc-windows-gnu"
@@ -65,7 +98,7 @@ def icon():
 
 def runtime():
     if not os.path.isfile(RUNTIME):
-        print(f"downloading {RUNTIME_URL}", flush=True)
+        groans.say("download", f"downloading {RUNTIME_URL}", name="the AppImage runtime", size="a few hundred KB")
         os.makedirs(os.path.dirname(RUNTIME), exist_ok=True)
         urllib.request.urlretrieve(RUNTIME_URL, RUNTIME + ".part")
         os.replace(RUNTIME + ".part", RUNTIME)
@@ -83,8 +116,7 @@ def build(name, project, package, manifest, triple=None):
     if manifest:
         command += ["--manifest-path", manifest]
         target = os.path.join(folder, os.path.dirname(manifest), "target")
-    print("+", " ".join(command), f"(in {project})", flush=True)
-    subprocess.run(command, cwd=folder, check=True)
+    groans.run(command, cwd=folder)
     return os.path.join(target, triple or "", "release", name + (".exe" if triple else ""))
 
 
@@ -104,8 +136,8 @@ def make(name, executable, target):
         os.chmod(os.path.join(app, "usr", "bin", name), 0o755)
 
         image = os.path.join(work, "image.squashfs")
-        subprocess.run(["mksquashfs", app, image, "-root-owned", "-noappend", "-quiet",
-                        "-comp", "gzip"], check=True, stdout=subprocess.DEVNULL)
+        groans.run(["mksquashfs", app, image, "-root-owned", "-noappend", "-quiet", "-comp", "gzip"],
+                   quiet_run=True)
         partial = target + ".tmp"
         with open(partial, "wb") as out:
             for part in (runtime(), image):
@@ -129,8 +161,9 @@ def rust_on_path():
 def build_all(out, names=None):
     """Make the AppImages of names (default: all) in out. Returns the paths made."""
     rust_on_path()
+    groans.section("build")
     if platform.system() != "Linux":
-        print("note: AppImages are Linux-only; skipped", file=sys.stderr)
+        groans.other("note: AppImages are Linux-only; skipped", sys.stderr)
         return []
     for tool in ("cargo", "mksquashfs"):
         if shutil.which(tool) is None:
@@ -140,12 +173,11 @@ def build_all(out, names=None):
     for name in names or PROGRAMS:
         project, package, manifest = PROGRAMS[name]
         if not os.path.isdir(os.path.join(ROOT, "..", project)):
-            print(f"note: no ../{project} next to this repository; no {name} AppImage",
-                  file=sys.stderr)
+            groans.other(f"note: no ../{project} next to this repository; no {name} AppImage", sys.stderr)
             continue
         target = os.path.join(out, f"{name}.AppImage")
         make(name, build(name, project, package, manifest), target)
-        print(f"{target}: {os.path.getsize(target) / (1024 * 1024):.1f} MB")
+        groans.built(target)
         made.append(target)
     return made
 
@@ -161,11 +193,11 @@ def build_exes(out, names=None):
     for name in names or PROGRAMS:
         project, package, manifest = PROGRAMS[name]
         if not os.path.isdir(os.path.join(ROOT, "..", project)):
-            print(f"note: no ../{project} next to this repository; no {name}.exe", file=sys.stderr)
+            groans.other(f"note: no ../{project} next to this repository; no {name}.exe", sys.stderr)
             continue
         target = os.path.join(out, name + ".exe")
         shutil.copy(build(name, project, package, manifest, WINDOWS), target)
-        print(f"{target}: {os.path.getsize(target) / (1024 * 1024):.1f} MB")
+        groans.built(target)
         made.append(target)
     return made
 
@@ -175,8 +207,18 @@ def main():
     parser.add_argument("--out", default=os.path.join(ROOT, "published", "releases"), help="where to write them")
     parser.add_argument("programs", nargs="*", choices=list(PROGRAMS),
                         help="only these (default: all)")
+    parser.add_argument("--computer-speak", action="store_true",
+                        help="say what it does plainly and formally, rather than as a descent "
+                             "through hell")
     options = parser.parse_args()
-    build_all(options.out, options.programs or None)
+    groans.start(None, options.computer_speak)
+    try:
+        build_all(options.out, options.programs or None)
+    except subprocess.CalledProcessError as error:
+        groans.finish("the AppImages", ok=False,
+                      error=f"{' '.join(map(str, error.cmd))} ended with code {error.returncode}")
+        sys.exit(1)
+    groans.finish("the AppImages")
 
 
 if __name__ == "__main__":

@@ -10,6 +10,7 @@ description = "Installs Nacht des Schreckens and everything it needs, then rebui
 [workspace]
 
 [dependencies]
+regex-lite = "0.1"
 clap = { version = "4.5.41", features = ["derive", "wrap_help"] }
 sha2 = "0.10"
 toml = { version = "0.8", default-features = false, features = ["parse"] }

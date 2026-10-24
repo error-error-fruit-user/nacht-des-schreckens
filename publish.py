@@ -38,6 +38,39 @@ import sys
 import zipfile
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "tools"))
+GROANS_GITHUB = "https://raw.githubusercontent.com/error-error-fruit-user/installation-groans/main/"
+
+
+def load_groans():
+    """installation-groans' groans.py, which these scripts speak through: the project's
+    installation-groans submodule, else the workspace's checkout beside the project, else a copy
+    fetched from its GitHub into published/artifacts/groans/."""
+    project = os.path.dirname(os.path.abspath(__file__))
+    places = [os.path.join(project, "installation-groans"),
+              os.path.join(os.path.dirname(project), "installation-groans"),
+              os.path.join(project, "published", "artifacts", "groans")]
+    folder = next((place for place in places if os.path.isfile(os.path.join(place, "groans.py"))), None)
+    if folder is None:
+        folder = places[-1]
+        try:
+            import urllib.request
+            os.makedirs(folder, exist_ok=True)
+            for name in ("groans.py", "toiling-through-hell.toml", "computer-speak.toml"):
+                with urllib.request.urlopen(GROANS_GITHUB + name, timeout=10) as answer:
+                    with open(os.path.join(folder, name), "wb") as out:
+                        out.write(answer.read())
+        except Exception as error:
+            sys.exit(f"installation-groans isn't beside {os.path.basename(project)}, and couldn't be "
+                     f"fetched ({error}): clone it beside it.")
+    if folder not in sys.path:
+        sys.path.insert(0, folder)
+    import groans
+    return groans
+
+
+groans = load_groans()
+
+
 import appimage  # noqa: E402
 
 # The folder that becomes the root of the pk3, and the name of the pk3
@@ -161,26 +194,23 @@ def find_tdl():
 def set_up_platzhalters():
     """Sets up nacht's loadout and its Nacht des Platzhalters profile with `tdl setup setup.toml`,
     then says, in a big way, that it can be played."""
+    groans.section("setup")
     tdl = find_tdl()
     if tdl is None:
-        print("note: no tdl to set up Nacht des Platzhalters with (../tdl/published/releases/ or the "
-              "PATH); with tdl, run: tdl setup setup.toml", file=sys.stderr)
+        groans.other("note: no tdl to set up Nacht des Platzhalters with (../tdl/published/releases/ "
+                     "or the PATH); with tdl, run: tdl setup setup.toml", sys.stderr)
         return
-    result = subprocess.run([tdl, "setup", "setup.toml"])
-    if result.returncode != 0:
-        print(f"note: tdl setup setup.toml failed ({result.returncode})", file=sys.stderr)
+    try:
+        groans.run([tdl, "setup", "setup.toml"])
+    except subprocess.CalledProcessError as error:
+        groans.other(f"note: tdl setup setup.toml failed ({error.returncode})", sys.stderr)
         return
-    color = sys.stdout.isatty() and "NO_COLOR" not in os.environ
-    loud = "\033[1;32m" if color else ""
-    plain = "\033[0m" if color else ""
-    print()
-    print(f"{loud}--- Nacht des Platzhalters is ready to play ---{plain}")
-    print("Doom's weapons stand in for World at War's, in a loadout of nacht's own:")
-    print(f"  {tdl} --loadout published/artifacts/loadout launch \"Nacht des Platzhalters\"")
-    print(f"or open it in tdl: {tdl} --loadout published/artifacts/loadout")
-    print("For Nacht des Schreckens, start World at War on Der Riese and run doomify.py: it adds that")
-    print("profile beside this one.")
-    print()
+    groans.section("play")
+    command = f'{tdl} --loadout published/artifacts/loadout launch "Nacht des Platzhalters"'
+    groans.say("ready", f"Nacht des Platzhalters is ready to play: {command}",
+               what="Nacht des Platzhalters", command=command)
+    groans.other("Doom's weapons stand in for World at War's, in a loadout of nacht's own; for "
+                 "Nacht des Schreckens, start World at War on Der Riese and run doomify.py.")
 
 
 def clear(folder):
@@ -198,68 +228,6 @@ def clear(folder):
     os.makedirs(folder)
 
 
-# The voice it speaks in, from installation-groans: the workspace's checkout beside this project,
-# else GitHub. Toiling Through Hell unless told --computer-speak; without one (or Python older than
-# 3.11, which can't read TOML), plain lines.
-GROANS = "https://raw.githubusercontent.com/error-error-fruit-user/installation-groans/main/"
-VOICE = {}
-
-
-def speak_in(name):
-    """Speaks in the installation-groans voice `name` (a file name) from now on, if it is found."""
-    global VOICE
-    try:
-        import tomllib
-    except ImportError:
-        return
-    here = os.path.dirname(os.path.abspath(__file__))
-    path = os.path.join(os.path.dirname(here), "installation-groans", name)
-    try:
-        if os.path.isfile(path):
-            with open(path, encoding="utf-8") as source:
-                text = source.read()
-        else:
-            import urllib.request
-            with urllib.request.urlopen(GROANS + name, timeout=5) as answer:
-                text = answer.read().decode()
-        VOICE = tomllib.loads(text)
-    except Exception:
-        VOICE = {}
-
-
-def tell(event, plain, **fills):
-    """Says `event` as one of the voice's phrases for it, picked at random and filled from `fills`,
-    or `plain` without one (a problem says `plain` too, if its phrase leaves the problem out). Now
-    and then the voice interjects (its [interjection])."""
-    import random
-    phrases = VOICE.get("phrases", {}).get(event) or []
-    out = sys.stderr if event == "problem" else sys.stdout
-    if not phrases:
-        print(plain, file=out, flush=True)
-        return
-    said = random.choice(phrases)
-    for name, value in fills.items():
-        said = said.replace("{" + name + "}", str(value))
-    print(said[:1].upper() + said[1:], file=out, flush=True)
-    if event == "problem" and str(fills.get("problem", plain)) not in said:
-        print(plain, file=out, flush=True)
-    interjection = VOICE.get("interjection", {})
-    if interjection.get("phrases") and random.random() < float(interjection.get("chance", 0)):
-        colors = {"yellow": 33, "green": 32, "blue": 34, "magenta": 35, "cyan": 36, "white": 37}
-        code = colors.get(interjection.get("color", "red"), 31)
-        shout = random.choice(interjection["phrases"])
-        tty = sys.stdout.isatty() and "NO_COLOR" not in os.environ
-        print(f"\033[1;{code}m{shout}\033[0m" if tty else shout, flush=True)
-
-
-def built(target, count=None):
-    """Says a file of the release is made: `target`, with how many files went into it."""
-    size = os.path.getsize(target) / (1024 * 1024)
-    inside = f"{count} files, " if count is not None else ""
-    tell("copy", f"{target}: {inside}{size:.1f} MB",
-         what=f"{os.path.basename(target)} ({inside}{size:.1f} MB)", place=os.path.dirname(target) or ".")
-
-
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out", help=f"where to write the pk3 (default: {OUT}/{NAME}, and the "
@@ -273,8 +241,9 @@ def main():
                         help="say what it does plainly and formally, rather than as a descent "
                              "through hell")
     options = parser.parse_args()
-    speak_in("computer-speak.toml" if options.computer_speak else "toiling-through-hell.toml")
-    tell("begin", "Publishing Nacht des Schreckens", what="Nacht des Schreckens", place=os.path.join("published", "releases"))
+    groans.start(None, options.computer_speak)
+    groans.say("begin", "Publishing Nacht des Schreckens", what="Nacht des Schreckens", place=os.path.join("published", "releases"))
+    groans.section("pack")
 
     here = os.path.dirname(os.path.abspath(__file__))
     os.chdir(here)
@@ -286,7 +255,7 @@ def main():
 
     found = warnings(files)
     for warning in found:
-        print("warning: " + warning, file=sys.stderr)
+        groans.other("warning: " + warning, sys.stderr)
     if found and options.strict:
         sys.exit(f"{len(found)} warning(s), and --strict was given")
 
@@ -300,7 +269,7 @@ def main():
             shutil.copy(license, OUT)
 
     pack(files, target)
-    built(target, len(files))
+    groans.built(target, len(files))
 
     # The library's own published/ is refreshed too (and left there), so it never lags behind nacht
     library_script = os.path.join(LIBRARY, "publish.py")
@@ -308,22 +277,21 @@ def main():
         library = [sys.executable, "-I", "publish.py"]
         if options.computer_speak:
             library.append("--computer-speak")
-        tell("run", "+ " + " ".join(library) + f"  (in {LIBRARY})", command=" ".join(library))
-        subprocess.run(library, cwd=LIBRARY, check=True)
+        groans.run(library, cwd=LIBRARY, voiced=True)
 
     if not options.out:
         library_pk3 = os.path.join(LIBRARY, "published", "releases", LIBRARY_PK3)
         if not options.no_library and os.path.isfile(library_pk3):
             shutil.copy(library_pk3, OUT)
-            built(os.path.join(OUT, LIBRARY_PK3))
+            groans.built(os.path.join(OUT, LIBRARY_PK3))
         if os.path.isdir(WAW):
             waw_target = os.path.join(ARTIFACTS, WAW_NAME)
             os.makedirs(ARTIFACTS, exist_ok=True)
             waw_files = gather(WAW)
             pack(waw_files, waw_target)
-            built(waw_target, len(waw_files))
+            groans.built(waw_target, len(waw_files))
         else:
-            print(f"note: no {WAW}/ folder to pack; run doomify.py first", file=sys.stderr)
+            groans.other(f"note: no {WAW}/ folder to pack; run doomify.py first", sys.stderr)
         if not options.no_appimages:
             appimage.build_all(OUT)
             appimage.build_exes(OUT)
@@ -334,10 +302,14 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-        tell("done", "Published.", what="Nacht des Schreckens")
+    except subprocess.CalledProcessError as error:
+        groans.finish("Nacht des Schreckens", ok=False,
+                      error=f"{' '.join(map(str, error.cmd))} ended with code {error.returncode}")
+        sys.exit(1)
     except SystemExit as stop:
         # 🗣️ a reason to stop is said in the voice too
         if isinstance(stop.code, str):
-            tell("problem", stop.code, problem=stop.code)
+            groans.say("problem", stop.code, problem=stop.code)
             sys.exit(1)
         raise
+    groans.finish("Nacht des Schreckens")
