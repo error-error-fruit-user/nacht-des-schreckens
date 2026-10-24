@@ -10,8 +10,9 @@ Run it before playing for the first time, and again after nacht's weapons change
 
 It needs Blender (blender.org), which renders the weapons. It runs doomify-waw: built from the
 workspace's own doomify-waw checkout when this one sits beside it (../doomify-waw, with
-../hell-hound), so it is never older than the workspace; else the one nacht-install put in
-doomify/, or doomify-waw on your PATH, or (with --source, or when there is neither) doomify-waw
+../hell-hound), so it is never older than the workspace; else the one in its artifacts (in this
+checkout published/artifacts/, where nacht-install's copy has it beside this), or doomify-waw on
+your PATH, or (with --source, or when there is neither) doomify-waw
 built from its repository with git and Rust's cargo, which it offers to install when they are
 missing and can all be installed at once. Released executables are on doomify-waw's
 GitHub releases. Anything after the options goes to doomify-waw build (--help lists them: --force
@@ -20,8 +21,9 @@ renders everything again, --blender PATH picks Blender).
   python3 doomify.py [--source | --no-build] [--pack] [--computer-speak] [-- doomify-waw build options]
 
 Before installing anything it says, under a red warning, exactly what will run, and asks.
---no-build never builds doomify-waw (nor installs what building needs): it uses the one in
-doomify/ or on the PATH.
+--no-build never builds doomify-waw (nor installs what building needs): it uses the one in its
+artifacts or on the PATH. Everything it makes but the weapons (doomify-waw built from source, its
+sources, its journal) goes in its artifacts.
 """
 
 import argparse
@@ -39,6 +41,11 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 # The folder holding this project and its neighbours, whose checkouts come before any download
 WORKSPACE = os.path.dirname(HERE)
 FOLDER = os.path.join(HERE, "doomify")
+# Everything this makes but the weapons (doomify-waw built from source, its sources, the journal):
+# in a checkout, the project's published/artifacts/; in nacht-install's copy, which is in the
+# install's artifacts already, beside this
+ARTIFACTS = (os.path.join(HERE, "published", "artifacts")
+             if os.path.isfile(os.path.join(HERE, "publish.py")) else HERE)
 OUTPUT = os.path.join(HERE, "nacht-waw")
 REPOSITORIES = {
     "doomify-waw": "https://github.com/error-error-fruit-user/doomify-waw.git",
@@ -50,7 +57,7 @@ RUST = (1, 88)
 
 # The journal: everything this does, with the time since it began (what it plans and is told,
 # every command and all it prints, every file it puts somewhere), added to JOURNAL on each run.
-JOURNAL = os.path.join(HERE, "doomify", "doomify.log")
+JOURNAL = os.path.join(ARTIFACTS, "doomify.log")
 BEGAN = time.monotonic()
 # Blender's line for every frame it renders, which would bury the rest
 CHATTER = ("Fra:", "Saved:", "Time:", "Read blend")
@@ -161,8 +168,9 @@ def executable_name():
 
 
 def installed():
-    """The doomify-waw nacht-install put in doomify/, or the one on the PATH; None without either."""
-    beside = os.path.join(FOLDER, executable_name())
+    """The doomify-waw in the artifacts (where nacht-install puts one), or the one on the PATH; None
+    without either."""
+    beside = os.path.join(ARTIFACTS, executable_name())
     return beside if os.path.isfile(beside) else shutil.which("doomify-waw")
 
 
@@ -247,11 +255,11 @@ def get_tools(git=True):
     plan = install_plan(missing_git, missing_rust)
     if plan is None or not sys.stdin.isatty():
         sys.exit(f"Building doomify-waw needs {wanted}: install them (git-scm.com, rustup.rs) and run"
-                 " this again, or put doomify-waw from its GitHub releases in doomify/")
+                 f" this again, or put doomify-waw from its GitHub releases in {ARTIFACTS}")
     warning([f"Building doomify-waw needs {wanted}. Saying yes will run:"]
             + [f"  - {' '.join(command)}: {explain(command)}" for command in plan]
             + ["", "To skip this: install them yourself, or pass --no-build to use only a "
-                   "doomify-waw that is already in doomify/ or on your PATH."])
+                   f"doomify-waw that is already in {ARTIFACTS} or on your PATH."])
     answer = input("Install them now? [y/N] ").strip()
     note(f"asked to install {wanted}, the answer was {answer!r}")
     if answer.lower() not in ("y", "yes"):
@@ -279,10 +287,10 @@ def build(project):
 
 
 def from_source():
-    """doomify-waw built from its repository, cloned (or updated) into doomify/src with hell-hound,
-    which it is built against, next to it."""
+    """doomify-waw built from its repository, cloned (or updated) into the artifacts' doomify-src/
+    with hell-hound, which it is built against, next to it."""
     get_tools()
-    sources = os.path.join(FOLDER, "src")
+    sources = os.path.join(ARTIFACTS, "doomify-src")
     os.makedirs(sources, exist_ok=True)
     for name, url in REPOSITORIES.items():
         path = os.path.join(sources, name)
@@ -350,7 +358,7 @@ def main():
                              "one (the workspace's checkout is always built first when there is one)")
     parser.add_argument("--no-build", action="store_true",
                         help="never build doomify-waw (or install what building needs): use the one "
-                             "in doomify/ or on the PATH")
+                             "in the artifacts or on the PATH")
     parser.add_argument("--pack", action="store_true", help="also zip nacht-waw/ into nacht-waw.pk3")
     parser.add_argument("--computer-speak", action="store_true",
                         help="say what it does plainly and formally, rather than as a descent through hell")
@@ -368,7 +376,7 @@ def main():
     if args.no_build:
         executable = installed()
         if executable is None:
-            sys.exit("--no-build: there is no doomify-waw in doomify/ or on the PATH")
+            sys.exit(f"--no-build: there is no doomify-waw in {ARTIFACTS} or on the PATH")
     elif workspace is not None:
         print(f"Building doomify-waw from the workspace: {workspace}")
         get_tools(git=False)
@@ -377,7 +385,7 @@ def main():
         executable = None if args.source else installed()
     if executable is None:
         if not args.source:
-            print("No doomify-waw in doomify/ or on the PATH: building it from source.")
+            print(f"No doomify-waw in {ARTIFACTS} or on the PATH: building it from source.")
         executable = from_source()
     tell("found", f"Using doomify-waw: {executable}", what="doomify-waw", place=executable)
     run([executable, "build", FOLDER, *args.rest])

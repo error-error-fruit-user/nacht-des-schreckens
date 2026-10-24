@@ -19,9 +19,12 @@
 //! HTTPS from the project's own releases.
 //!
 //! It asks (or `--mode` says) where to install: in place, for you or for everyone, like
-//! `tdl-install`. Into that folder go the pk3s in `wads/` (a pool tdl offers), the `doomify`
-//! machinery in `nacht-des-schreckens/`, and Blender (downloaded, checked against its published
-//! SHA-256, unless it is installed already) in `blender/`. Then, if World at War is running with
+//! `tdl-install`. The payload goes in that folder: the pk3s, in `wads/` (a pool tdl offers).
+//! Everything else is an artifact, in `artifacts/` there (nacht's `published/artifacts/` when this
+//! runs in place from its `published/releases/`, or `--artifacts`): tdl with UZDoom and Freedoom 2,
+//! the `doomify` machinery in `nacht-des-schreckens/`, Blender (downloaded, checked against its
+//! published SHA-256, unless it is installed already) in `blender/`, the song in `songs/`, the
+//! install's loadout and its journal. Then, if World at War is running with
 //! Der Riese loaded, it runs `doomify.py`, which takes about an hour the first time. Last, it
 //! pulls nacht's song, Der Riese's Beauty of Annihilation, out of the player's World at War
 //! (found in a Steam library, or `--waw`) into `songs/` (`--no-song` leaves it), and sets up the
@@ -186,6 +189,11 @@ struct Cli {
     /// Doesn't pull nacht's song (Beauty of Annihilation) from World at War for tdl to play
     #[arg(long)]
     no_song: bool,
+    /// Where everything but the pk3s goes (tdl, UZDoom, Freedoom 2, Blender, doomify.py, the song,
+    /// the loadout, the journal). Defaults to `artifacts/` in the install's folder, or nacht's
+    /// `published/artifacts/` when this runs in place from its `published/releases/`.
+    #[arg(long, value_name = "DIR")]
+    artifacts: Option<PathBuf>,
     /// World at War's folder, if it isn't in a Steam library this can find
     #[arg(long, value_name = "DIR")]
     waw: Option<PathBuf>,
@@ -286,8 +294,10 @@ fn run(cli: &Cli) -> Outcome<()> {
         }
     }
     fs::create_dir_all(&dir).map_err(|error| format!("{}: {error}", dir.display()))?;
-    // 📓 from here on the journal is kept in the install's folder
-    let journal = journal::open(&dir, "nacht-install.log");
+    let art = artifacts_dir(cli.artifacts.as_deref(), &dir, &here);
+    fs::create_dir_all(&art).map_err(|error| format!("{}: {error}", art.display()))?;
+    // 📓 from here on the journal is kept with the artifacts
+    let journal = journal::open(&art, "nacht-install.log");
     journal::tell(
         "begin",
         &[
@@ -309,9 +319,9 @@ fn run(cli: &Cli) -> Outcome<()> {
 
     let scratch = Scratch::new();
     if !cli.no_tdl {
-        install_tdl(&here, &dir, mode, cli, &scratch)?;
+        install_tdl(&here, &art, mode, cli, &scratch)?;
     }
-    let home = dir.join(NAME);
+    let home = art.join(NAME);
     place_files(&here, &dir, &home, &scratch)?;
 
     let python = find_python();
@@ -323,21 +333,22 @@ fn run(cli: &Cli) -> Outcome<()> {
     }
     let blender = match &cli.blender {
         Some(path) => Some(path.clone()),
-        None if cli.no_blender => find_blender(&dir),
-        None => ensure_blender(&dir, cli.yes)?,
+        None if cli.no_blender => find_blender(&art),
+        None => ensure_blender(&art, cli.yes)?,
     };
     note!("blender: {:?}", blender);
     if !cli.no_doomify
-        && let Some(python) = python {
-            doomify(
-                &python,
-                &home,
-                &dir,
-                blender.as_deref(),
-                cli.yes,
-                cli.computer_speak,
-            );
-        }
+        && let Some(python) = python
+    {
+        doomify(
+            &python,
+            &home,
+            &dir,
+            blender.as_deref(),
+            cli.yes,
+            cli.computer_speak,
+        );
+    }
     if let Some(journal) = &journal {
         journal::tell(
             "journal",
@@ -348,27 +359,28 @@ fn run(cli: &Cli) -> Outcome<()> {
     let song = if cli.no_song {
         None
     } else {
-        pull_song(&SONG, &dir, cli.waw.as_deref())
+        pull_song(&SONG, &art, cli.waw.as_deref())
     };
-    let tdl = set_up_loadout(&dir, &home, song.as_deref());
+    let tdl = set_up_loadout(&dir, &art, &home, song.as_deref());
     journal::tell(
         "done",
         &[("what", "Nacht des Schreckens")],
         "Done: Nacht des Platzhalters (and Nacht des Schreckens, once doomify.py has made its weapons) are profiles in the install's loadout",
     );
     if let Some(tdl) = tdl {
-        play(&tdl, &dir, cli.no_play);
+        play(&tdl, &dir, &art, cli.no_play);
     }
     Ok(())
 }
 
-/// The install's own loadout (`<dir>/loadout`): `setup.toml` beside doomify.py makes Nacht des
-/// Platzhalters in it, and Nacht des Schreckens once `nacht-waw.pk3` is in the wad pool, and the tdl
-/// the install put in `dir` (or the one on the PATH) runs `tdl setup` on it. Returns that tdl, or
+/// The install's own loadout (`<art>/loadout`, in the artifacts): `setup.toml` beside doomify.py
+/// makes Nacht des Platzhalters in it, and Nacht des Schreckens once `nacht-waw.pk3` is in the wad
+/// pool (`<dir>/wads`), and the tdl the install put in `art` (or the one on the PATH) runs
+/// `tdl setup` on it. Returns that tdl, or
 /// `None` (said) when there is none or the setup failed.
-fn set_up_loadout(dir: &Path, home: &Path, song: Option<&Path>) -> Option<PathBuf> {
+fn set_up_loadout(dir: &Path, art: &Path, home: &Path, song: Option<&Path>) -> Option<PathBuf> {
     let name = if cfg!(windows) { "tdl.exe" } else { "tdl" };
-    let tdl = Some(dir.join(name))
+    let tdl = Some(art.join(name))
         .filter(|tdl| tdl.is_file())
         .or_else(|| {
             std::env::var_os("PATH").and_then(|path| {
@@ -380,7 +392,7 @@ fn set_up_loadout(dir: &Path, home: &Path, song: Option<&Path>) -> Option<PathBu
     let Some(tdl) = tdl else {
         warn!(
             "There is no tdl to set up the profiles with (tdl-install puts one in {})",
-            dir.display()
+            art.display()
         );
         return None;
     };
@@ -390,7 +402,7 @@ fn set_up_loadout(dir: &Path, home: &Path, song: Option<&Path>) -> Option<PathBu
         "# The install's own loadout, and its profiles: what nacht-install keeps with `tdl setup`.\n\
          loadout = {}\nremember_loadout = false\n{}\n\
          [[profiles]]\nname = \"Nacht des Platzhalters\"\nwads = [{}, {}]\n",
-        quoted(&dir.join("loadout")),
+        quoted(&art.join("loadout")),
         song.map(|song| format!("song = {}\n", quoted(song)))
             .unwrap_or_default(),
         quoted(&wads.join("horde-hammer.pk3")),
@@ -582,8 +594,8 @@ fn world_at_war(given: Option<&Path>) -> Option<PathBuf> {
 /// Opens `tdl` on the install's loadout, with no question: for this run only (`--session`, so the
 /// loadout tdl opens otherwise stays as it was) and with the install's wads as the wad pool. Only
 /// when there is a terminal for it and `--no-play` wasn't given; otherwise says how to.
-fn play(tdl: &Path, dir: &Path, no_play: bool) {
-    let loadout = dir.join("loadout");
+fn play(tdl: &Path, dir: &Path, art: &Path, no_play: bool) {
+    let loadout = art.join("loadout");
     // 🗝️ --session asks nothing about what is passed; --wads gives the wad pool, so the wads beside
     // tdl aren't asked about either
     let wads = dir.join("wads");
@@ -710,7 +722,14 @@ fn install_tdl(here: &Path, dir: &Path, mode: Mode, cli: &Cli, scratch: &Scratch
     let mut command = Command::new(&installer);
     // 📦 the installer is its own AppImage, if it is one
     command.env_remove("APPIMAGE");
-    command.arg("--mode").arg(mode.flag()).arg("--dir").arg(dir);
+    // 🗃️ tdl is an artifact here, and so is all tdl-install makes beside it
+    command
+        .arg("--mode")
+        .arg(mode.flag())
+        .arg("--dir")
+        .arg(dir)
+        .arg("--artifacts")
+        .arg(dir);
     if cli.computer_speak {
         command.arg("--computer-speak");
     }
@@ -760,7 +779,8 @@ fn place_files(here: &Path, dir: &Path, home: &Path, scratch: &Scratch) -> Outco
         embedded::FILES.len() - 1,
         home.display()
     );
-    let to = home.join("doomify").join(if cfg!(windows) {
+    // 🗃️ doomify.py's artifacts are beside it here, in the install's artifacts
+    let to = home.join(if cfg!(windows) {
         "doomify-waw.exe"
     } else {
         "doomify-waw"
@@ -1143,6 +1163,26 @@ fn parse_choice(line: &str) -> Option<Mode> {
         "2" | "user" | "u" | "you" | "for you" => Some(Mode::User),
         "3" | "system" | "s" | "everyone" | "for everyone" => Some(Mode::System),
         _ => None,
+    }
+}
+
+/// Where everything but the pk3s goes: `given`, or, when this runs in place from a project's
+/// `published/releases/`, that project's `published/artifacts/`, or else `<dir>/artifacts/`.
+fn artifacts_dir(given: Option<&Path>, dir: &Path, here: &Path) -> PathBuf {
+    if let Some(given) = given {
+        return std::path::absolute(given).unwrap_or_else(|_| given.to_path_buf());
+    }
+    match here.parent() {
+        Some(published)
+            if dir == here
+                && here.file_name().is_some_and(|name| name == "releases")
+                && published
+                    .file_name()
+                    .is_some_and(|name| name == "published") =>
+        {
+            published.join("artifacts")
+        }
+        _ => dir.join("artifacts"),
     }
 }
 

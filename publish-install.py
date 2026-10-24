@@ -36,7 +36,7 @@ NAME = "nacht-des-schreckens"
 
 # The journal: everything this does, with the time since it began (what it plans and is told,
 # every command and all it prints, every file it puts somewhere), added to JOURNAL on each run.
-JOURNAL = os.path.join(HERE, "published", "publish-install.log")
+JOURNAL = os.path.join(HERE, "published", "artifacts", "publish-install.log")
 BEGAN = time.monotonic()
 # Blender's line for every frame it renders, which would bury the rest
 CHATTER = ("Fra:", "Saved:", "Time:", "Read blend")
@@ -232,13 +232,21 @@ def plan(args):
     lines.append(where.get(args.mode) or
                  f"    - asks where to install: in place, for you ({user}) or for everyone "
                  f"({system}, needs {'administrator' if WINDOWS else 'root'})")
-    lines.append("    - puts horde-hammer.pk3 and nacht.pk3 in its wads/, and doomify.py with its "
-                 f"settings in {NAME}/ there, with a doomify-waw: the one beside it, the workspace's "
+    if args.dir:
+        art = "artifacts/ in --dir"
+    elif args.mode == "in-place":
+        art = "published/artifacts/"
+    else:
+        art = "artifacts/ there (published/artifacts/ if it installs in place here)"
+    lines.append("    - puts horde-hammer.pk3 and nacht.pk3, the payload, in its wads/, and "
+                 f"everything else, its artifacts, in {art}: tdl, Blender, the song, the loadout, "
+                 "its log, and doomify.py with its "
+                 f"settings in {NAME}/, with a doomify-waw: the one beside it, the workspace's "
                  "(../doomify-waw/published/releases/) or else downloaded from doomify-waw's latest "
                  "GitHub release")
     if not args.no_tdl:
         tdl = ("    - runs tdl-install (beside it, the workspace's ../tdl/published/releases/, or else "
-               "downloaded from tdl's latest GitHub release), which puts tdl there")
+               "downloaded from tdl's latest GitHub release), which puts tdl in the artifacts")
         if args.mode != "in-place":
             tdl += " with the tdl command on the PATH"
         downloads = [name for name, left_out in (("UZDoom 5.0.3", args.no_uzdoom),
@@ -249,13 +257,13 @@ def plan(args):
     if args.blender:
         lines.append(f"    - renders with the Blender at {args.blender}")
     elif not args.no_blender:
-        lines.append("    - downloads Blender 4.2.9 LTS into blender/ there, checked against its "
+        lines.append("    - downloads Blender 4.2.9 LTS into blender/ in the artifacts, checked against its "
                      "published hash, if no Blender 4.0 or newer is installed"
                      + (" (--yes: without asking)" if args.yes else ", after asking"))
     if not args.no_song:
         lines.append("    - pulls Beauty of Annihilation out of your World at War"
                      + (f" (at {args.waw})" if args.waw else " (found in your Steam libraries)")
-                     + " into songs/ there and makes it tdl's song, for every loadout. It is heavy "
+                     + " into songs/ in the artifacts and makes it tdl's song, for every loadout. It is heavy "
                      "metal: tdl's splash will open on down-tuned riffs and screaming, so mind your "
                      "speakers (--no-song keeps the music you have)")
     if not args.no_doomify:
@@ -300,9 +308,17 @@ def installer():
     sys.exit("There is no nacht-install in published/releases/: build it (leave out --no-build).")
 
 
+def artifacts_of(folder):
+    """The artifacts of an install in `folder`: published/artifacts/ for one in place here, else
+    artifacts/ in it."""
+    if os.path.abspath(folder) == os.path.abspath(RELEASES):
+        return os.path.join(HERE, "published", "artifacts")
+    return os.path.join(folder, "artifacts")
+
+
 def install_dir(args):
     """Where nacht-install just installed: --dir, or where --mode puts it, or (when it asked) the
-    newest of those places with a loadout."""
+    newest of those places with a loadout in its artifacts."""
     if args.dir:
         return args.dir
     if WINDOWS:
@@ -314,28 +330,31 @@ def install_dir(args):
     modes = {"in-place": RELEASES, "user": user, "system": system}
     if args.mode:
         return modes[args.mode]
-    found = [folder for folder in modes.values() if os.path.isdir(os.path.join(folder, "loadout"))]
-    return max(found, key=lambda folder: os.path.getmtime(os.path.join(folder, "loadout"))) \
-        if found else None
+    def loadout(folder):
+        return os.path.join(artifacts_of(folder), "loadout")
+
+    found = [folder for folder in modes.values() if os.path.isdir(loadout(folder))]
+    return max(found, key=lambda folder: os.path.getmtime(loadout(folder))) if found else None
 
 
 def shortcut(args):
     """The Nacht des Schreckens shortcut: the install's tdl (or the one on the PATH) on its loadout,
     as nacht-install opens it at the end."""
     folder = install_dir(args)
-    if folder is None or not os.path.isdir(os.path.join(folder, "loadout")):
+    if folder is None or not os.path.isdir(os.path.join(artifacts_of(folder), "loadout")):
         print("Made no shortcut: nacht-install's folder, with its loadout, isn't where this can "
               "find it.")
         return
     folder = os.path.abspath(folder)
+    art = os.path.abspath(artifacts_of(folder))
     names = ["tdl.exe"] if WINDOWS else ["tdl", "tdl.AppImage"]
-    tdl = next((os.path.join(folder, name) for name in names
-                if os.path.isfile(os.path.join(folder, name))), None) or shutil.which("tdl")
+    tdl = next((os.path.join(art, name) for name in names
+                if os.path.isfile(os.path.join(art, name))), None) or shutil.which("tdl")
     if tdl is None:
-        print("Made no shortcut: there is no tdl beside nacht or on your PATH.")
+        print("Made no shortcut: there is no tdl in nacht's artifacts or on your PATH.")
         return
     make_shortcut("Nacht des Schreckens", NAME,
-                  [tdl, "--session", "--loadout", os.path.join(folder, "loadout"),
+                  [tdl, "--session", "--loadout", os.path.join(art, "loadout"),
                    "--wads", os.path.join(folder, "wads")],
                   "World at War's Nacht der Untoten on Doom 2, in tdl")
 
