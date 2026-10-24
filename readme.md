@@ -29,7 +29,9 @@ It runs the `doomify-waw` executable in `doomify/`, or with `--source` builds it
 uzdoom -iwad doom2.wad -file horde-hammer.pk3 nacht.pk3 nacht-waw
 ```
 
-`python3 publish.py` here (and in Horde Hammer) makes the pk3s in `published/`; `nacht-waw` is yours alone, never share it. Without Horde Hammer, UZDoom stops at startup with "Unknown class HH_..."; without `nacht-waw`, the game stops and tells you to run `doomify.py`.
+The released folder (`published/releases/`) has `nacht-install` (`nacht-install.exe` on Windows, an AppImage on Linux; its source is `installer/`), which asks where to install (in place, for you or for everyone), runs `tdl-install` (tdl, UZDoom, Freedoom 2 and the `tdl` command on your PATH), puts `horde-hammer.pk3` and `nacht.pk3` in `wads/`, downloads Blender 4.2 LTS if it isn't installed (it asks first) and, once World at War is running with Der Riese loaded, runs `doomify.py` to make `nacht-waw.pk3`. `--help` lists its options.
+
+`python3 publish.py` here (and in Horde Hammer) makes the pk3s in `published/releases/` (`nacht-waw.pk3` goes in `published/artifacts/`), and also puts `horde-hammer.pk3` and a copy of `doomify.py` with its `doomify/*.toml` there; `nacht-waw` is yours alone, never share it. Without Horde Hammer, UZDoom stops at startup with "Unknown class HH_..."; without `nacht-waw`, the game stops and tells you to run `doomify.py`.
 
 For the IWAD, use 'doom2.wad' from a legal copy of [Doom + Doom II](https://store.steampowered.com/app/2280/DOOM__DOOM_II/), or 'freedoom2.wad' from the [Freedoom project](https://freedoom.github.io/download.html).
 

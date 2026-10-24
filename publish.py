@@ -1,11 +1,18 @@
 #!/usr/bin/env python3
-"""Pack the mod folder into a playable .pk3 (a zip with another extension) in published/.
+"""Pack the mod folder into a playable .pk3 (a zip with another extension) in published/releases/.
 
-usage: python3 publish.py [--out FILE] [--strict] [--no-library]
+usage: python3 publish.py [--out FILE] [--strict] [--no-library] [--no-appimages]
 
 When Horde Hammer's repository is next to this one (../horde-hammer), it is packed too, into its own
-published/ only, so its pk3 there always matches nacht (a library older than nacht stops UZDoom at
+published/releases/ only, so its pk3 there always matches nacht (a library older than nacht stops UZDoom at
 startup with "unknown actor property"). --no-library skips that.
+With the default output, published/releases/ also gets a copy of horde-hammer.pk3 and of doomify.py.
+The nacht-waw/ folder is packed as published/artifacts/nacht-waw.pk3, outside that folder (when doomify.py has
+built it), so it never ships with the rest. nacht-waw is made from the player's own game: it is for
+them alone, never share it.
+nacht-install is built there too, as an AppImage (tools/appimage.py; needs cargo and mksquashfs)
+and as a Windows executable (cross-built for x86_64-pc-windows-gnu). The tools it installs (tdl,
+doomify-waw...) are not published here. --no-appimages skips both.
 
 Dependency-free Python 3.8+. The pk3 is reproducible: files go in sorted order with a fixed
 timestamp, so the same folder always packs to the same bytes (and tdl hashes it the same).
@@ -29,15 +36,28 @@ import subprocess
 import sys
 import zipfile
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "tools"))
+import appimage  # noqa: E402
+
 # The folder that becomes the root of the pk3, and the name of the pk3
 PACKAGE = "nacht"
 NAME = "nacht.pk3"
 # Copied next to the pk3 and into it under licenses/
 LICENSES = ["LICENSE-weather"]
 
-OUT = "published"
+OUT = os.path.join("published", "releases")
+# What running the installed game makes (nacht-waw, from the player's own game), next to OUT
+ARTIFACTS = os.path.join("published", "artifacts")
 # The library nacht runs on, packed alongside it when its repository is here
 LIBRARY = os.path.join("..", "horde-hammer")
+LIBRARY_PK3 = "horde-hammer.pk3"
+# Built by doomify.py, loaded after nacht; packed as a pk3 in published/ itself, outside OUT
+WAW = "nacht-waw"
+WAW_NAME = "nacht-waw.pk3"
+# The script that builds WAW, copied into OUT
+DOOMIFY = "doomify.py"
+# Its settings and the weapon and sound TOMLs, copied into OUT under the same names
+DOOMIFY_FOLDER = "doomify"
 
 # 1980-01-01, the earliest time a zip can hold
 EPOCH = (1980, 1, 1, 0, 0, 0)
@@ -136,6 +156,7 @@ def main():
                         f"licenses next to it); any other path writes only the pk3")
     parser.add_argument("--strict", action="store_true", help="fail on warnings")
     parser.add_argument("--no-library", action="store_true", help="don't pack Horde Hammer too")
+    parser.add_argument("--no-appimages", action="store_true", help="don't build the AppImages")
     options = parser.parse_args()
 
     here = os.path.dirname(os.path.abspath(__file__))
@@ -170,6 +191,32 @@ def main():
     library_script = os.path.join(LIBRARY, "publish.py")
     if not options.no_library and os.path.isfile(library_script):
         subprocess.run([sys.executable, "-I", "publish.py"], cwd=LIBRARY, check=True)
+
+    if not options.out:
+        library_pk3 = os.path.join(LIBRARY, "published", "releases", LIBRARY_PK3)
+        if not options.no_library and os.path.isfile(library_pk3):
+            shutil.copy(library_pk3, OUT)
+            print(f"{os.path.join(OUT, LIBRARY_PK3)}: copied")
+        shutil.copy(DOOMIFY, OUT)
+        print(f"{os.path.join(OUT, DOOMIFY)}: copied")
+        tomls = [(path, os.path.join(OUT, path)) for path, _ in gather(DOOMIFY_FOLDER)
+                 if path.endswith(".toml")]
+        for path, copy in tomls:
+            os.makedirs(os.path.dirname(copy), exist_ok=True)
+            shutil.copy(path, copy)
+        print(f"{os.path.join(OUT, DOOMIFY_FOLDER)}/: {len(tomls)} TOMLs copied")
+        if os.path.isdir(WAW):
+            waw_target = os.path.join(ARTIFACTS, WAW_NAME)
+            os.makedirs(ARTIFACTS, exist_ok=True)
+            waw_files = gather(WAW)
+            pack(waw_files, waw_target)
+            size = os.path.getsize(waw_target) / (1024 * 1024)
+            print(f"{waw_target}: {len(waw_files)} files, {size:.1f} MB")
+        else:
+            print(f"note: no {WAW}/ folder to pack; run doomify.py first", file=sys.stderr)
+        if not options.no_appimages:
+            appimage.build_all(OUT)
+            appimage.build_exes(OUT)
 
 
 if __name__ == "__main__":

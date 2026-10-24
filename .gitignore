@@ -11,3 +11,4 @@ __pycache__/
 /nacht-waw.pk3
 # doomify-waw and hell-hound, cloned and built by doomify.py --source
 /doomify/src/
+/installer/target
