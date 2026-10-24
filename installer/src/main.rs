@@ -152,6 +152,9 @@ struct Cli {
     /// Doesn't run doomify.py.
     #[arg(long)]
     no_doomify: bool,
+    /// Doesn't open tdl on the install's loadout at the end
+    #[arg(long)]
+    no_play: bool,
     /// The Blender doomify.py renders with, instead of finding or downloading one.
     #[arg(long, value_name = "PATH")]
     blender: Option<PathBuf>,
@@ -309,13 +312,123 @@ fn run(cli: &Cli) -> Outcome<()> {
             &format!("Everything this install did is in {}", journal.display()),
         );
     }
+    let tdl = set_up_loadout(&dir, &home);
     journal::tell(
         "done",
         &[("what", "Nacht des Schreckens")],
-        "Done. In tdl, make a profile with horde-hammer.pk3, nacht.pk3 and then nacht-waw.pk3",
+        "Done: Nacht des Platzhalters (and Nacht des Schreckens, once doomify.py has made its weapons) are profiles in the install's loadout",
     );
-    say!("(wads/ in {} is a wad pool tdl offers).", dir.display());
+    if let Some(tdl) = tdl {
+        play(&tdl, &dir, cli.no_play);
+    }
     Ok(())
+}
+
+/// The install's own loadout (`<dir>/loadout`): `setup.toml` beside doomify.py makes Nacht des
+/// Platzhalters in it, and Nacht des Schreckens once `nacht-waw.pk3` is in the wad pool, and the tdl
+/// the install put in `dir` (or the one on the PATH) runs `tdl setup` on it. Returns that tdl, or
+/// `None` (said) when there is none or the setup failed.
+fn set_up_loadout(dir: &Path, home: &Path) -> Option<PathBuf> {
+    let name = if cfg!(windows) { "tdl.exe" } else { "tdl" };
+    let tdl = Some(dir.join(name))
+        .filter(|tdl| tdl.is_file())
+        .or_else(|| {
+            std::env::var_os("PATH").and_then(|path| {
+                std::env::split_paths(&path)
+                    .map(|folder| folder.join(name))
+                    .find(|tdl| tdl.is_file())
+            })
+        });
+    let Some(tdl) = tdl else {
+        warn!(
+            "There is no tdl to set up the profiles with (tdl-install puts one in {})",
+            dir.display()
+        );
+        return None;
+    };
+    let wads = dir.join("wads");
+    let quoted = |path: &Path| format!("{:?}", path.display().to_string());
+    let mut text = format!(
+        "# The install's own loadout, and its profiles: what nacht-install keeps with `tdl setup`.\n\
+         loadout = {}\nremember_loadout = false\n\n\
+         [[profiles]]\nname = \"Nacht des Platzhalters\"\nwads = [{}, {}]\n",
+        quoted(&dir.join("loadout")),
+        quoted(&wads.join("horde-hammer.pk3")),
+        quoted(&wads.join("nacht.pk3")),
+    );
+    if wads.join("nacht-waw.pk3").is_file() {
+        text.push_str(&format!(
+            "\n[[profiles]]\nname = \"Nacht des Schreckens\"\nwads = [{}, {}, {}]\n",
+            quoted(&wads.join("horde-hammer.pk3")),
+            quoted(&wads.join("nacht.pk3")),
+            quoted(&wads.join("nacht-waw.pk3")),
+        ));
+    }
+    let setup = home.join("setup.toml");
+    if let Err(problem) = write_text(&setup, &text) {
+        warn!("{problem}");
+        return None;
+    }
+    let command = format!("tdl setup {}", setup.display());
+    journal::tell(
+        "run",
+        &[("command", &command)],
+        &format!("running {command}"),
+    );
+    match Command::new(&tdl).arg("setup").arg(&setup).status() {
+        Ok(status) if status.success() => {
+            journal::tell(
+                "ran",
+                &[("command", &command)],
+                &format!("{command} is done"),
+            );
+            Some(tdl)
+        }
+        Ok(status) => {
+            warn!("{command} failed ({status})");
+            None
+        }
+        Err(error) => {
+            warn!("Couldn't run {}: {error}", tdl.display());
+            None
+        }
+    }
+}
+
+/// Opens `tdl` on the install's loadout, with no question: for this run only (`--session`, so the
+/// loadout tdl opens otherwise stays as it was) and with the install's wads as the wad pool. Only
+/// when there is a terminal for it and `--no-play` wasn't given; otherwise says how to.
+fn play(tdl: &Path, dir: &Path, no_play: bool) {
+    let loadout = dir.join("loadout");
+    // 🗝️ --session asks nothing about what is passed; --wads gives the wad pool, so the wads beside
+    // tdl aren't asked about either
+    let wads = dir.join("wads");
+    let command = format!(
+        "{} --session --loadout {} --wads {}",
+        tdl.display(),
+        loadout.display(),
+        wads.display()
+    );
+    if no_play || !io::stdin().is_terminal() || !io::stdout().is_terminal() {
+        say!("To play: {command}");
+        return;
+    }
+    journal::tell(
+        "run",
+        &[("command", &command)],
+        &format!("Opening tdl: {command}"),
+    );
+    let opened = Command::new(tdl)
+        .arg("--session")
+        .arg("--loadout")
+        .arg(&loadout)
+        .arg("--wads")
+        .arg(&wads)
+        .status();
+    if let Err(error) = opened {
+        warn!("Couldn't run {}: {error}", tdl.display());
+        say!("To play: {command}");
+    }
 }
 
 /// What a release calls the program `name` on this system.
