@@ -272,7 +272,7 @@ def get_tools(git=True):
             + [f"  - {' '.join(command)}: {explain(command)}" for command in plan]
             + ["", "To skip this: install them yourself, or pass --no-build to use only a "
                    f"doomify-waw that is already in {ARTIFACTS} or on your PATH."])
-    answer = input("Install them now? [y/N] ").strip()
+    answer = input("Install them now? [y/n] ").strip()
     note(f"asked to install {wanted}, the answer was {answer!r}")
     if answer.lower() not in ("y", "yes"):
         sys.exit("Not installed: doomify-waw can't be built without them.")

@@ -1113,7 +1113,7 @@ fn ask_yes(question: &str) -> bool {
     if !io::stdin().is_terminal() {
         return false;
     }
-    print!("{question} [y/N] ");
+    print!("{question} [y/n] ");
     let _ = io::stdout().flush();
     let mut line = String::new();
     io::stdin().read_line(&mut line).is_ok()
