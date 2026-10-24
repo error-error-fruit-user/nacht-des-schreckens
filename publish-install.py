@@ -10,7 +10,7 @@ nacht-install for Windows and as an AppImage, into published/releases/), or with
 and nacht-install for this machine only (cargo build --release), or with --no-build nothing at
 all; and runs the nacht-install in published/releases/, which installs the pk3s, tdl and Blender
 where it is asked to (--mode) and offers to run doomify.py. --mode, --dir, --yes, --no-tdl,
---no-uzdoom, --no-freedoom, --no-blender, --no-doomify and --blender go to nacht-install (see its
+--no-uzdoom, --no-freedoom, --no-blender, --no-doomify, --no-song, --waw and --blender go to nacht-install (see its
 --help). Right after the warning it asks whether to make a Nacht des Schreckens shortcut (the app
 menu and the desktop, or the Start menu and the desktop on Windows) with the system's lock icon,
 opening the install's tdl on its loadout; --no-shortcuts makes none without asking.
@@ -252,6 +252,12 @@ def plan(args):
         lines.append("    - downloads Blender 4.2.9 LTS into blender/ there, checked against its "
                      "published hash, if no Blender 4.0 or newer is installed"
                      + (" (--yes: without asking)" if args.yes else ", after asking"))
+    if not args.no_song:
+        lines.append("    - pulls Beauty of Annihilation out of your World at War"
+                     + (f" (at {args.waw})" if args.waw else " (found in your Steam libraries)")
+                     + " into songs/ there and makes it tdl's song, for every loadout. It is heavy "
+                     "metal: tdl's splash will open on down-tuned riffs and screaming, so mind your "
+                     "speakers (--no-song keeps the music you have)")
     if not args.no_doomify:
         lines.append("    - if World at War is running with Der Riese loaded, runs doomify.py"
                      + (" (--yes: without asking)" if args.yes else ", after asking")
@@ -260,7 +266,7 @@ def plan(args):
     lines.append("")
     lines.append("To change that: --no-build installs what is published already, --source builds only "
                  "for this machine, --no-tdl, --no-uzdoom, --no-freedoom, --no-blender and "
-                 "--no-doomify leave those out, --blender PATH uses your Blender, --yes answers "
+                 "--no-doomify and --no-song leave those out, --waw DIR says where World at War is, --blender PATH uses your Blender, --yes answers "
                  "nacht-install's questions, --mode and --dir say where, and --no-shortcuts doesn't "
                  "ask about shortcuts.")
     return lines
@@ -346,9 +352,11 @@ def main():
     passed.add_argument("--mode", choices=["in-place", "user", "system"])
     passed.add_argument("--dir")
     passed.add_argument("--yes", action="store_true", help="answer yes to nacht-install's questions")
-    for flag in ("--no-tdl", "--no-uzdoom", "--no-freedoom", "--no-blender", "--no-doomify"):
+    for flag in ("--no-tdl", "--no-uzdoom", "--no-freedoom", "--no-blender", "--no-doomify",
+                 "--no-song"):
         passed.add_argument(flag, action="store_true")
     passed.add_argument("--blender", metavar="PATH")
+    passed.add_argument("--waw", metavar="DIR")
     parser.add_argument("--no-shortcuts", action="store_true",
                         help="make no shortcuts, and don't ask about them")
     args = parser.parse_args()
@@ -361,14 +369,16 @@ def main():
         sys.exit("Nothing was done.")
     build(args)
     command = [installer()]
-    for flag, value in (("--mode", args.mode), ("--dir", args.dir), ("--blender", args.blender)):
+    for flag, value in (("--mode", args.mode), ("--dir", args.dir), ("--blender", args.blender),
+                        ("--waw", args.waw)):
         if value:
             command += [flag, value]
     command += [flag for flag, on in (("--yes", args.yes), ("--no-tdl", args.no_tdl),
                                       ("--no-uzdoom", args.no_uzdoom),
                                       ("--no-freedoom", args.no_freedoom),
                                       ("--no-blender", args.no_blender),
-                                      ("--no-doomify", args.no_doomify)) if on]
+                                      ("--no-doomify", args.no_doomify),
+                                      ("--no-song", args.no_song)) if on]
     run(command)
     if shortcuts:
         shortcut(args)

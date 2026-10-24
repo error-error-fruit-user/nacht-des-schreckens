@@ -22,7 +22,10 @@
 //! `tdl-install`. Into that folder go the pk3s in `wads/` (a pool tdl offers), the `doomify`
 //! machinery in `nacht-des-schreckens/`, and Blender (downloaded, checked against its published
 //! SHA-256, unless it is installed already) in `blender/`. Then, if World at War is running with
-//! Der Riese loaded, it runs `doomify.py`, which takes about an hour the first time.
+//! Der Riese loaded, it runs `doomify.py`, which takes about an hour the first time. Last, it
+//! pulls nacht's song, Der Riese's Beauty of Annihilation, out of the player's World at War
+//! (found in a Steam library, or `--waw`) into `songs/` (`--no-song` leaves it), and sets up the
+//! install's loadout with `tdl setup`, the song as tdl's.
 
 #[macro_use]
 mod journal;
@@ -47,6 +50,31 @@ const TDL_REPOSITORY: &str = "error-error-fruit-user/tdl";
 const DOOMIFY_REPOSITORY: &str = "error-error-fruit-user/doomify-waw";
 /// What the installed copy of this project is called.
 const NAME: &str = "nacht-des-schreckens";
+
+/// A song of World at War's a map brings: pulled from the player's own game into the install's
+/// `songs/` (it never comes with the map) and kept as tdl's song. Each map has its own.
+struct Song {
+    title: &'static str,
+    /// What it is called in `songs/`.
+    file: &'static str,
+    /// Where it is in World at War's IWDs, in lowercase (the last IWD with it wins, as in the game).
+    inside: &'static str,
+    /// What the warning says about it before it is put in, its own for every song.
+    warning: &'static str,
+}
+
+/// Nacht's song: Der Riese's Beauty of Annihilation.
+const SONG: Song = Song {
+    title: "Beauty of Annihilation",
+    file: "beauty_of_annihilation.wav",
+    inside: "sound/stream/music/mission/zombie/mx_beauty.wav",
+    warning: "Beauty of Annihilation, Der Riese's song, is heavy metal: it becomes tdl's song, so \
+              the splash opens on down-tuned riffs and screaming. Turn your speakers down, or pass \
+              --no-song to keep the music you have.",
+};
+
+/// World at War's folder in a Steam library.
+const WORLD_AT_WAR: &str = "steamapps/common/Call of Duty World at War";
 
 /// A TOML file of the repository, embedded when this is built.
 #[derive(Clone, Copy, Debug)]
@@ -155,6 +183,12 @@ struct Cli {
     /// Doesn't open tdl on the install's loadout at the end
     #[arg(long)]
     no_play: bool,
+    /// Doesn't pull nacht's song (Beauty of Annihilation) from World at War for tdl to play
+    #[arg(long)]
+    no_song: bool,
+    /// World at War's folder, if it isn't in a Steam library this can find
+    #[arg(long, value_name = "DIR")]
+    waw: Option<PathBuf>,
     /// The Blender doomify.py renders with, instead of finding or downloading one.
     #[arg(long, value_name = "PATH")]
     blender: Option<PathBuf>,
@@ -293,8 +327,8 @@ fn run(cli: &Cli) -> Outcome<()> {
         None => ensure_blender(&dir, cli.yes)?,
     };
     note!("blender: {:?}", blender);
-    if !cli.no_doomify {
-        if let Some(python) = python {
+    if !cli.no_doomify
+        && let Some(python) = python {
             doomify(
                 &python,
                 &home,
@@ -304,7 +338,6 @@ fn run(cli: &Cli) -> Outcome<()> {
                 cli.computer_speak,
             );
         }
-    }
     if let Some(journal) = &journal {
         journal::tell(
             "journal",
@@ -312,7 +345,12 @@ fn run(cli: &Cli) -> Outcome<()> {
             &format!("Everything this install did is in {}", journal.display()),
         );
     }
-    let tdl = set_up_loadout(&dir, &home);
+    let song = if cli.no_song {
+        None
+    } else {
+        pull_song(&SONG, &dir, cli.waw.as_deref())
+    };
+    let tdl = set_up_loadout(&dir, &home, song.as_deref());
     journal::tell(
         "done",
         &[("what", "Nacht des Schreckens")],
@@ -328,7 +366,7 @@ fn run(cli: &Cli) -> Outcome<()> {
 /// Platzhalters in it, and Nacht des Schreckens once `nacht-waw.pk3` is in the wad pool, and the tdl
 /// the install put in `dir` (or the one on the PATH) runs `tdl setup` on it. Returns that tdl, or
 /// `None` (said) when there is none or the setup failed.
-fn set_up_loadout(dir: &Path, home: &Path) -> Option<PathBuf> {
+fn set_up_loadout(dir: &Path, home: &Path, song: Option<&Path>) -> Option<PathBuf> {
     let name = if cfg!(windows) { "tdl.exe" } else { "tdl" };
     let tdl = Some(dir.join(name))
         .filter(|tdl| tdl.is_file())
@@ -350,15 +388,17 @@ fn set_up_loadout(dir: &Path, home: &Path) -> Option<PathBuf> {
     let quoted = |path: &Path| format!("{:?}", path.display().to_string());
     let mut text = format!(
         "# The install's own loadout, and its profiles: what nacht-install keeps with `tdl setup`.\n\
-         loadout = {}\nremember_loadout = false\n\n\
+         loadout = {}\nremember_loadout = false\n{}\n\
          [[profiles]]\nname = \"Nacht des Platzhalters\"\nwads = [{}, {}]\n",
         quoted(&dir.join("loadout")),
+        song.map(|song| format!("song = {}\n", quoted(song)))
+            .unwrap_or_default(),
         quoted(&wads.join("horde-hammer.pk3")),
         quoted(&wads.join("nacht.pk3")),
     );
     if wads.join("nacht-waw.pk3").is_file() {
         text.push_str(&format!(
-            "\n[[profiles]]\nname = \"Nacht des Schreckens\"\nwads = [{}, {}, {}]\n",
+            "\n[[profiles]]\nname = \"Nacht des Schreckens\"\nplace = 1\nwads = [{}, {}, {}]\n",
             quoted(&wads.join("horde-hammer.pk3")),
             quoted(&wads.join("nacht.pk3")),
             quoted(&wads.join("nacht-waw.pk3")),
@@ -393,6 +433,150 @@ fn set_up_loadout(dir: &Path, home: &Path) -> Option<PathBuf> {
             None
         }
     }
+}
+
+/// Pulls `song` out of the player's World at War (`waw`, or the one in a Steam library) into
+/// `<dir>/songs/`, after its warning. Returns where it is, or `None` (said) when there is no game
+/// or no song in it.
+fn pull_song(song: &Song, dir: &Path, waw: Option<&Path>) -> Option<PathBuf> {
+    say!("{}", song.warning);
+    let Some(main) = world_at_war(waw) else {
+        say!(
+            "World at War wasn't found, so {} isn't tdl's song (--waw DIR says where it is)",
+            song.title
+        );
+        return None;
+    };
+    journal::tell(
+        "found",
+        &[
+            ("what", "World at War"),
+            ("place", &main.display().to_string()),
+        ],
+        &format!("World at War: {}", main.display()),
+    );
+    let to = dir.join("songs").join(song.file);
+    match pull(song, &main, &to) {
+        Ok(true) => {
+            journal::tell(
+                "copy",
+                &[("what", song.title), ("place", &to.display().to_string())],
+                &format!("{}: {}", song.title, to.display()),
+            );
+            Some(to)
+        }
+        Ok(false) => {
+            say!(
+                "{} isn't in World at War's IWDs in {}",
+                song.title,
+                main.display()
+            );
+            None
+        }
+        Err(problem) => {
+            warn!("Couldn't pull {}: {problem}", song.title);
+            None
+        }
+    }
+}
+
+/// Copies `song` from the last of `main`'s IWDs that has it to `to`. `false` if none has it.
+fn pull(song: &Song, main: &Path, to: &Path) -> Outcome<bool> {
+    let problem =
+        |path: &Path, error: &dyn std::fmt::Display| format!("{}: {error}", path.display());
+    let mut iwds: Vec<PathBuf> = fs::read_dir(main)
+        .map_err(|error| problem(main, &error))?
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| iwd_number(path).is_some())
+        .collect();
+    // 🔢 the game reads them in order, and a later one overrides an earlier one
+    iwds.sort_by_key(|path| iwd_number(path));
+    for iwd in iwds.iter().rev() {
+        let file = fs::File::open(iwd).map_err(|error| problem(iwd, &error))?;
+        let mut archive = zip::ZipArchive::new(file).map_err(|error| problem(iwd, &error))?;
+        let Some(name) = archive
+            .file_names()
+            .find(|name| name.eq_ignore_ascii_case(song.inside))
+            .map(str::to_string)
+        else {
+            continue;
+        };
+        let mut entry = archive
+            .by_name(&name)
+            .map_err(|error| problem(iwd, &error))?;
+        if fs::metadata(to).is_ok_and(|kept| kept.len() == entry.size()) {
+            note!("{} is in {} already", song.title, to.display());
+            return Ok(true);
+        }
+        let mut bytes = Vec::with_capacity(entry.size() as usize);
+        entry
+            .read_to_end(&mut bytes)
+            .map_err(|error| problem(iwd, &error))?;
+        let folder = to.parent().unwrap_or(Path::new("."));
+        fs::create_dir_all(folder).map_err(|error| problem(folder, &error))?;
+        let part = to.with_extension("part");
+        fs::write(&part, &bytes).map_err(|error| problem(&part, &error))?;
+        fs::rename(&part, to).map_err(|error| problem(to, &error))?;
+        note!("pulled {name} from {} into {}", iwd.display(), to.display());
+        return Ok(true);
+    }
+    Ok(false)
+}
+
+/// `12` for `iw_12.iwd`; `None` for anything else.
+fn iwd_number(path: &Path) -> Option<u32> {
+    let name = path.file_name()?.to_str()?.to_ascii_lowercase();
+    name.strip_prefix("iw_")?.strip_suffix(".iwd")?.parse().ok()
+}
+
+/// World at War's `main` folder: in `given` (the game's folder or its `main`), or else in one of
+/// the Steam libraries on this machine.
+fn world_at_war(given: Option<&Path>) -> Option<PathBuf> {
+    let main_of = |folder: &Path| {
+        [folder.join("main"), folder.to_path_buf()]
+            .into_iter()
+            .find(|main| main.join("iw_00.iwd").is_file())
+    };
+    if let Some(given) = given {
+        return main_of(given);
+    }
+    let var = |name: &str| std::env::var_os(name).map(PathBuf::from);
+    let roots: Vec<PathBuf> = if cfg!(windows) {
+        ["ProgramFiles(x86)", "ProgramFiles"]
+            .iter()
+            .filter_map(|name| var(name))
+            .map(|folder| folder.join("Steam"))
+            .collect()
+    } else {
+        let home = var("HOME").unwrap_or_default();
+        [
+            ".steam/steam",
+            ".steam/debian-installation",
+            ".local/share/Steam",
+            ".var/app/com.valvesoftware.Steam/.local/share/Steam",
+        ]
+        .iter()
+        .map(|root| home.join(root))
+        .collect()
+    };
+    // 📚 every library a Steam knows is in its libraryfolders.vdf, as "path" lines
+    let mut libraries = Vec::new();
+    for root in roots.iter().filter(|root| root.is_dir()) {
+        libraries.push(root.clone());
+        let vdf = fs::read_to_string(root.join("steamapps/libraryfolders.vdf")).unwrap_or_default();
+        for line in vdf.lines() {
+            let mut parts = line.split('"').filter(|part| !part.trim().is_empty());
+            if parts.next() == Some("path")
+                && let Some(path) = parts.next()
+            {
+                libraries.push(PathBuf::from(path.replace("\\\\", "\\")));
+            }
+        }
+    }
+    libraries
+        .iter()
+        .find_map(|library| main_of(&library.join(WORLD_AT_WAR)))
 }
 
 /// Opens `tdl` on the install's loadout, with no question: for this run only (`--session`, so the
