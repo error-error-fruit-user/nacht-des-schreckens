@@ -12,5 +12,6 @@ description = "Installs Nacht des Schreckens and everything it needs, then rebui
 [dependencies]
 clap = { version = "4.5.41", features = ["derive", "wrap_help"] }
 sha2 = "0.10"
+toml = { version = "0.8", default-features = false, features = ["parse"] }
 ureq = "3.4.2"
 zip = { version = "2.6.1", default-features = false, features = ["deflate"] }

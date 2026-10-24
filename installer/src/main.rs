@@ -44,8 +44,47 @@ const DOOMIFY_REPOSITORY: &str = "error-error-fruit-user/doomify-waw";
 /// What the installed copy of this project is called.
 const NAME: &str = "nacht-des-schreckens";
 
-/// `doomify.py` and `doomify/**/*.toml`, as the repository had them when this was built.
+/// A TOML file of the repository, embedded when this is built.
+#[derive(Clone, Copy, Debug)]
+pub struct Toml {
+    /// Where it is in the repository.
+    pub path: &'static str,
+    /// What is in it, as the repository had it when this was built.
+    pub source: &'static str,
+}
+
+impl Toml {
+    /// The file parsed, for looking at its settings.
+    pub fn table(&self) -> Result<toml::Table, toml::de::Error> {
+        self.source.parse()
+    }
+}
+
+/// Embeds a TOML file of the repository as a [`Toml`], in a const. The path is from the
+/// repository's root (this installer is in `installer/`, one level down):
+///
+/// ```ignore
+/// const colt: Toml = const_toml!["doomify/weapons/colt.toml"];
+/// ```
+///
+/// `build.rs` makes one for every TOML under `doomify/`, named after its path in upper case
+/// (`DOOMIFY_WEAPONS_COLT_TOML`); to add settings of your own, put the file there (the next build
+/// picks it up) or call this by hand. Edit a file, then rebuild.
+macro_rules! const_toml {
+    ($path:literal) => {
+        $crate::Toml {
+            path: $path,
+            source: include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../", $path)),
+        }
+    };
+}
+
+/// `doomify.py` and `doomify/**/*.toml`, as consts (`DOOMIFY_PY`, `DOOMIFY_WEAPONS_COLT_TOML`...)
+/// and the tables `FILES`, `WEAPONS` and `SOUNDS`, as the repository had them when this was built.
+#[allow(dead_code)] // the per-file consts and tables are there to be used when customizing
 mod embedded {
+    use crate::Toml;
+
     include!(concat!(env!("OUT_DIR"), "/embedded.rs"));
 }
 
@@ -777,9 +816,24 @@ mod tests {
     fn the_settings_are_embedded() {
         let names: Vec<_> = embedded::FILES.iter().map(|(name, _)| *name).collect();
         assert!(names.contains(&"doomify.py"));
+        assert_eq!(embedded::DOOMIFY_PY, embedded::FILES[0].1);
+        assert!(embedded::DOOMIFY_DOOMIFY_TOML.source.contains("prefix"));
+        assert_eq!(embedded::DOOMIFY_DOOMIFY_TOML.path, "doomify/doomify.toml");
+        assert!(embedded::WEAPONS.iter().any(|(name, _)| *name == "doomify/weapons/colt.toml"));
+        assert!(embedded::WEAPONS.contains(&("doomify/weapons/colt.toml", embedded::DOOMIFY_WEAPONS_COLT_TOML.source)));
+        assert!(embedded::SOUNDS.iter().all(|(name, _)| name.starts_with("doomify/sounds/")));
         assert!(names.contains(&"doomify/doomify.toml"));
         assert!(names.iter().any(|name| name.starts_with("doomify/weapons/")));
         assert!(embedded::FILES.iter().all(|(_, contents)| !contents.is_empty()));
+    }
+
+    #[test]
+    fn every_embedded_toml_parses() {
+        for (name, source) in embedded::FILES.iter().filter(|(name, _)| name.ends_with(".toml")) {
+            assert!(source.parse::<toml::Table>().is_ok(), "{name} isn't TOML");
+        }
+        let colt = embedded::DOOMIFY_WEAPONS_COLT_TOML.table().unwrap();
+        assert!(!colt.is_empty());
     }
 
     #[test]
