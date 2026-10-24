@@ -30,6 +30,8 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 RELEASES = os.path.join(HERE, "published", "releases")
 WINDOWS = platform.system() == "Windows"
+# What publish.py is told about the voice to speak in
+PUBLISH_VOICE = []
 WHAT = "Nacht des Schreckens"
 # The installer it runs, which takes --computer-speak too
 INSTALLER = 'nacht-install'
@@ -408,7 +410,7 @@ def refresh_tools():
             note(f"{project}'s release is newer than its sources")
             continue
         check_owner([path for path in (os.path.join(folder, "published"),) if os.path.isdir(path)])
-        run([sys.executable, "publish.py"], cwd=folder)
+        run([sys.executable, "publish.py", *PUBLISH_VOICE], cwd=folder)
 
 
 def build(args):
@@ -416,13 +418,13 @@ def build(args):
         return
     refresh_tools()
     if args.source:
-        run([sys.executable, "publish.py", "--no-appimages"])
+        run([sys.executable, "publish.py", *PUBLISH_VOICE, "--no-appimages"])
         run(["cargo", "build", "--release"], cwd=os.path.join(HERE, "installer"))
         shutil.copy2(os.path.join(HERE, "installer", "target", "release", "nacht-install" + EXE),
                      os.path.join(RELEASES, "nacht-install" + EXE))
         note(f"copied the release build into {RELEASES}")
         return
-    run([sys.executable, "publish.py"])
+    run([sys.executable, "publish.py", *PUBLISH_VOICE])
     # 🧹 a plain nacht-install left by --source would be taken over the AppImage just built
     leftover = os.path.join(RELEASES, "nacht-install")
     if not WINDOWS and os.path.isfile(leftover):
@@ -568,6 +570,8 @@ def main():
                              "through hell" + (" (and have the installer do the same)" if INSTALLER else ""))
     args = parser.parse_args()
     speak_in("computer-speak.toml" if args.computer_speak else "toiling-through-hell.toml")
+    if args.computer_speak:
+        PUBLISH_VOICE.append("--computer-speak")
     note(f"=== {os.path.basename(__file__)} {' '.join(sys.argv[1:])} ===")
     refuse_root_build(args)
 
