@@ -69,12 +69,12 @@ def sky(rows, top, bottom):
 
 
 def rain(rows, density, color, length=6):
-    """Blood rain: thin streaks falling slightly to the left."""
+    """Blood rain: thin streaks, each one unbroken drop (leaning, a drop came apart in two)."""
     for x in range(0, WIDTH, 2):
         for y in range(0, HEIGHT, 3):
             if noise(x, y, 7) < density:
                 for k in range(length):
-                    px, py = x - k // 3, y + k
+                    px, py = x, y + k
                     if 0 <= px < WIDTH and 0 <= py < HEIGHT:
                         fade = 1 - k / length
                         rows[py][px] = mix(rows[py][px][:3], color, 0.4 * fade)
