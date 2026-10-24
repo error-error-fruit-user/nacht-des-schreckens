@@ -155,7 +155,24 @@ struct Cli {
     /// The Blender doomify.py renders with, instead of finding or downloading one.
     #[arg(long, value_name = "PATH")]
     blender: Option<PathBuf>,
+    /// Says what it does plainly and formally, rather than as a descent through hell (and has
+    /// tdl-install and doomify.py do the same)
+    #[arg(long)]
+    computer_speak: bool,
 }
+
+/// One of installation-groans' voices, as this was built with it (see `build.rs`): the same trick
+/// as `const_toml!`, from the build's own folder.
+macro_rules! const_groan {
+    ($voice:literal) => {
+        include_str!(concat!(env!("OUT_DIR"), "/groans/", $voice))
+    };
+}
+
+/// Toiling Through Hell, the voice the install speaks in unless told `--computer-speak`.
+const TOILING_THROUGH_HELL: &str = const_groan!["toiling-through-hell.toml"];
+/// Computer Speak, for `--computer-speak`.
+const COMPUTER_SPEAK: &str = const_groan!["computer-speak.toml"];
 
 /// Where nacht lives.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, ValueEnum)]
@@ -193,6 +210,11 @@ fn program_dir() -> Option<PathBuf> {
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
+    journal::speak_in(if cli.computer_speak {
+        COMPUTER_SPEAK
+    } else {
+        TOILING_THROUGH_HELL
+    });
     match run(&cli) {
         Ok(()) => ExitCode::SUCCESS,
         Err(problem) => {
@@ -229,7 +251,14 @@ fn run(cli: &Cli) -> Outcome<()> {
     fs::create_dir_all(&dir).map_err(|error| format!("{}: {error}", dir.display()))?;
     // 📓 from here on the journal is kept in the install's folder
     let journal = journal::open(&dir, "nacht-install.log");
-    say!("Installing Nacht des Schreckens in {}", dir.display());
+    journal::tell(
+        "begin",
+        &[
+            ("what", "Nacht des Schreckens"),
+            ("place", &dir.display().to_string()),
+        ],
+        &format!("Installing Nacht des Schreckens in {}", dir.display()),
+    );
     note!("this program is in {}", here.display());
     note!(
         "mode {mode:?}; leaving out: tdl {}, uzdoom {}, freedoom {}, blender {}, doomify {}; yes to everything: {}",
@@ -263,13 +292,28 @@ fn run(cli: &Cli) -> Outcome<()> {
     note!("blender: {:?}", blender);
     if !cli.no_doomify {
         if let Some(python) = python {
-            doomify(&python, &home, &dir, blender.as_deref(), cli.yes);
+            doomify(
+                &python,
+                &home,
+                &dir,
+                blender.as_deref(),
+                cli.yes,
+                cli.computer_speak,
+            );
         }
     }
     if let Some(journal) = &journal {
-        say!("Everything this install did is in {}", journal.display());
+        journal::tell(
+            "journal",
+            &[("place", &journal.display().to_string())],
+            &format!("Everything this install did is in {}", journal.display()),
+        );
     }
-    say!("\nDone. In tdl, make a profile with horde-hammer.pk3, nacht.pk3 and then nacht-waw.pk3");
+    journal::tell(
+        "done",
+        &[("what", "Nacht des Schreckens")],
+        "Done. In tdl, make a profile with horde-hammer.pk3, nacht.pk3 and then nacht-waw.pk3",
+    );
     say!("(wads/ in {} is a wad pool tdl offers).", dir.display());
     Ok(())
 }
@@ -299,7 +343,11 @@ fn get_tool(
         note!("{name}: the one beside this program, {}", beside.display());
         copy_whole(&beside, to)?;
     } else if let Some(built) = from_workspace(here, project, name) {
-        say!("{name}: {}", built.display());
+        journal::tell(
+            "found",
+            &[("what", name), ("place", &built.display().to_string())],
+            &format!("{name}: {}", built.display()),
+        );
         note!("{name}: the workspace's release, {}", built.display());
         copy_whole(&built, to)?;
     } else {
@@ -307,7 +355,11 @@ fn get_tool(
             "{RELEASES}/{repository}/releases/latest/download/{}",
             asset(name)
         );
-        say!("{name} isn't next to this program, so it is downloaded: {url}");
+        journal::tell(
+            "download",
+            &[("name", name), ("size", "its size unknown")],
+            &format!("{name} isn't next to this program, so it is downloaded: {url}"),
+        );
         let file = fetch_unpinned(&url, &asset(name), scratch)?;
         copy_whole(&file, to)?;
     }
@@ -351,7 +403,7 @@ fn install_tdl(here: &Path, dir: &Path, mode: Mode, cli: &Cli, scratch: &Scratch
         )?;
         make_executable(&dir.join(if cfg!(windows) { "tdl.exe" } else { "tdl" }))?;
     }
-    say!("Running tdl-install");
+    journal::tell("run", &[("command", "tdl-install")], "Running tdl-install");
     note!(
         "running {} --mode {} --dir {}",
         installer.display(),
@@ -362,6 +414,9 @@ fn install_tdl(here: &Path, dir: &Path, mode: Mode, cli: &Cli, scratch: &Scratch
     // 📦 the installer is its own AppImage, if it is one
     command.env_remove("APPIMAGE");
     command.arg("--mode").arg(mode.flag()).arg("--dir").arg(dir);
+    if cli.computer_speak {
+        command.arg("--computer-speak");
+    }
     if cli.no_uzdoom {
         command.arg("--no-uzdoom");
     }
@@ -385,10 +440,23 @@ fn place_files(here: &Path, dir: &Path, home: &Path, scratch: &Scratch) -> Outco
     let wads = dir.join("wads");
     for pk3 in PK3S {
         copy_whole(&here.join(pk3), &wads.join(pk3))?;
-        say!("{pk3}: {}", wads.join(pk3).display());
+        journal::tell(
+            "copy",
+            &[("what", pk3), ("place", &wads.display().to_string())],
+            &format!("{pk3}: {}", wads.join(pk3).display()),
+        );
     }
     for (inside, contents) in embedded::FILES {
         write_text(&home.join(inside), contents)?;
+    }
+    // 🗣️ the voices this was built with, for doomify.py, which has no workspace beside it here
+    for (voice, contents) in [
+        ("toiling-through-hell.toml", TOILING_THROUGH_HELL),
+        ("computer-speak.toml", COMPUTER_SPEAK),
+    ] {
+        if !contents.is_empty() {
+            write_text(&home.join("groans").join(voice), contents)?;
+        }
     }
     note!(
         "wrote doomify.py and its {} settings into {}",
@@ -407,7 +475,14 @@ fn place_files(here: &Path, dir: &Path, home: &Path, scratch: &Scratch) -> Outco
         );
     }
     unpack_sprites(&here.join("nacht.pk3"), &home.join("nacht"))?;
-    say!("doomify.py: {}", home.display());
+    journal::tell(
+        "copy",
+        &[
+            ("what", "doomify.py"),
+            ("place", &home.display().to_string()),
+        ],
+        &format!("doomify.py: {}", home.display()),
+    );
     Ok(())
 }
 
@@ -563,7 +638,11 @@ fn blender_in(folder: &Path) -> Option<PathBuf> {
 /// Finds Blender or, if the user agrees, downloads it into `<dir>/blender/`.
 fn ensure_blender(dir: &Path, yes: bool) -> Outcome<Option<PathBuf>> {
     if let Some(found) = find_blender(dir) {
-        say!("Blender: {}", found.display());
+        journal::tell(
+            "found",
+            &[("what", "Blender"), ("place", &found.display().to_string())],
+            &format!("Blender: {}", found.display()),
+        );
         return Ok(Some(found));
     }
     let download = if cfg!(all(windows, target_arch = "x86_64")) {
@@ -586,7 +665,14 @@ fn ensure_blender(dir: &Path, yes: bool) -> Outcome<Option<PathBuf>> {
     let scratch = Scratch::new();
     let file = fetch(download, &scratch)?;
     let folder = dir.join("blender");
-    note!("unpacking {} into {}", download.name, folder.display());
+    journal::tell(
+        "unpack",
+        &[
+            ("name", download.name),
+            ("place", &folder.display().to_string()),
+        ],
+        &format!("unpacking {} into {}", download.name, folder.display()),
+    );
     let part = dir.join("blender.part");
     let _ = fs::remove_dir_all(&part);
     fs::create_dir_all(&part).map_err(|error| format!("{}: {error}", part.display()))?;
@@ -645,8 +731,18 @@ fn unpack_zip(file: &Path, folder: &Path) -> Outcome<()> {
 /// Runs doomify.py in `home` (after asking whether the game is running), then puts the packed
 /// `nacht-waw.pk3` in the wad pool. Nothing here is an error: the rest is installed, and the
 /// command to run later is printed.
-fn doomify(python: &OsString, home: &Path, dir: &Path, blender: Option<&Path>, yes: bool) {
+fn doomify(
+    python: &OsString,
+    home: &Path,
+    dir: &Path,
+    blender: Option<&Path>,
+    yes: bool,
+    computer_speak: bool,
+) {
     let mut args: Vec<OsString> = vec!["doomify.py".into(), "--pack".into()];
+    if computer_speak {
+        args.push("--computer-speak".into());
+    }
     if let Some(blender) = blender {
         args.extend(["--".into(), "--blender".into(), blender.into()]);
     }
@@ -836,6 +932,18 @@ fn fetch_unpinned(url: &str, name: &str, scratch: &Scratch) -> Outcome<PathBuf> 
 
 fn fetch_from(download: &Download, url: &str, scratch: &Scratch) -> Outcome<PathBuf> {
     let path = scratch.dir()?.join(download.name);
+    journal::tell(
+        "download",
+        &[
+            ("name", download.name),
+            ("size", &journal::size(download.size)),
+        ],
+        &format!(
+            "Downloading {} ({})",
+            download.name,
+            journal::size(download.size)
+        ),
+    );
     note!(
         "downloading {url} ({} bytes, SHA-256 {}) to {}",
         download.size,
@@ -879,11 +987,21 @@ fn fetch_from(download: &Download, url: &str, scratch: &Scratch) -> Outcome<Path
     let hash = hex(&hasher.finalize());
     if hash != download.sha256 {
         note!("{} came with SHA-256 {hash}", download.name);
+        journal::tell(
+            "corrupted",
+            &[("name", download.name)],
+            &format!("{} isn't the file it should be", download.name),
+        );
         return Err(failed(&"it isn't the file it should be (its hash differs)"));
     }
     note!(
         "{}: {total} bytes, and its hash is the one it should be",
         download.name
+    );
+    journal::tell(
+        "verified",
+        &[("name", download.name)],
+        &format!("{}: checked", download.name),
     );
     Ok(path)
 }

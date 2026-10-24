@@ -3,6 +3,11 @@
 //! tables `FILES`, `WEAPONS` and `SOUNDS` over them, so the settings it installs are the ones in the repository when it is built: edit them, then
 //! rebuild (`cargo build --release`) to customize. (doomify-waw and the other files in `doomify/`
 //! are not embedded.)
+//!
+//! It also brings the voices from installation-groans (`toiling-through-hell.toml`,
+//! `computer-speak.toml`) into `OUT_DIR/groans/`, for `const_groan!` to build in: from the
+//! workspace's checkout beside nacht's when there is one, or else from GitHub. A voice found in
+//! neither is left empty, and the installer speaks plainly.
 
 use std::{
     env, fs, io,
@@ -20,6 +25,35 @@ fn tomls(folder: &Path, found: &mut Vec<PathBuf>) -> io::Result<()> {
         {
             found.push(path);
         }
+    }
+    Ok(())
+}
+
+/// installation-groans' voices into `OUT_DIR/groans/`, from beside `root` or else GitHub.
+fn groans(root: &Path) -> io::Result<()> {
+    const GITHUB: &str =
+        "https://raw.githubusercontent.com/error-error-fruit-user/installation-groans/main";
+    let out = PathBuf::from(env::var("OUT_DIR").unwrap()).join("groans");
+    fs::create_dir_all(&out)?;
+    for voice in ["toiling-through-hell.toml", "computer-speak.toml"] {
+        let local = root.join("..").join("installation-groans").join(voice);
+        println!("cargo:rerun-if-changed={}", local.display());
+        let text = fs::read_to_string(&local).ok().or_else(|| {
+            let fetched = std::process::Command::new("curl")
+                .args(["-fsSL", &format!("{GITHUB}/{voice}")])
+                .output()
+                .ok()?;
+            fetched
+                .status
+                .success()
+                .then(|| String::from_utf8_lossy(&fetched.stdout).into_owned())
+        });
+        if text.is_none() {
+            println!(
+                "cargo:warning=installation-groans' {voice} is neither beside nacht nor on GitHub: the installer speaks plainly"
+            );
+        }
+        fs::write(out.join(voice), text.unwrap_or_default())?;
     }
     Ok(())
 }
@@ -108,6 +142,7 @@ fn main() -> io::Result<()> {
         code,
     )?;
 
+    groans(&root)?;
     println!("cargo:rerun-if-changed={}", script.display());
     println!("cargo:rerun-if-changed={}", folder.display());
     for path in &files {

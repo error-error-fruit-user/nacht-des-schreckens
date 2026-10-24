@@ -17,7 +17,7 @@ missing and can all be installed at once. Released executables are on doomify-wa
 GitHub releases. Anything after the options goes to doomify-waw build (--help lists them: --force
 renders everything again, --blender PATH picks Blender).
 
-  python3 doomify.py [--source | --no-build] [--pack] [-- doomify-waw build options]
+  python3 doomify.py [--source | --no-build] [--pack] [--computer-speak] [-- doomify-waw build options]
 
 Before installing anything it says, under a red warning, exactly what will run, and asks.
 --no-build never builds doomify-waw (nor installs what building needs): it uses the one in
@@ -64,12 +64,72 @@ def note(line):
             journal.write(f"[{time.monotonic() - BEGAN:8.3f}s] {part}\n")
 
 
+# The voice it speaks in, from installation-groans: the workspace's checkout beside nacht, else the
+# groans/ folder nacht-install put beside this, else GitHub. Toiling Through Hell unless told
+# --computer-speak; without one (or Python older than 3.11, which can't read TOML), plain lines.
+GROANS = "https://raw.githubusercontent.com/error-error-fruit-user/installation-groans/main/"
+VOICE = {}
+
+
+def speak_in(name):
+    """Speaks in the installation-groans voice `name` (a file name) from now on, if it is found."""
+    global VOICE
+    try:
+        import tomllib
+    except ImportError:
+        return
+    text = None
+    for folder in (os.path.join(WORKSPACE, "installation-groans"), os.path.join(HERE, "groans")):
+        path = os.path.join(folder, name)
+        if os.path.isfile(path):
+            with open(path, encoding="utf-8") as source:
+                text = source.read()
+            break
+    if text is None:
+        try:
+            import urllib.request
+            with urllib.request.urlopen(GROANS + name, timeout=5) as answer:
+                text = answer.read().decode()
+        except Exception:
+            return
+    try:
+        VOICE = tomllib.loads(text)
+    except Exception:
+        VOICE = {}
+
+
+def tell(event, plain, **fills):
+    """Says `event` as one of the voice's phrases for it, picked at random and filled from `fills`,
+    or `plain` without one; the journal keeps the plain line either way. Now and then the voice
+    interjects (its [interjection])."""
+    import random
+    phrases = VOICE.get("phrases", {}).get(event) or []
+    if not phrases:
+        print(plain, flush=True)
+        note(plain)
+        return
+    said = random.choice(phrases)
+    for name, value in fills.items():
+        said = said.replace("{" + name + "}", str(value))
+    said = said[:1].upper() + said[1:]
+    print(said, flush=True)
+    note(f"{said}  ({plain})")
+    interjection = VOICE.get("interjection", {})
+    if interjection.get("phrases") and random.random() < float(interjection.get("chance", 0)):
+        colors = {"yellow": 33, "green": 32, "blue": 34, "magenta": 35, "cyan": 36, "white": 37}
+        code = colors.get(interjection.get("color", "red"), 31)
+        shout = random.choice(interjection["phrases"])
+        tty = sys.stdout.isatty() and "NO_COLOR" not in os.environ
+        print(f"\033[1;{code}m{shout}\033[0m" if tty else shout, flush=True)
+        note(shout)
+
+
 def run(command, cwd=HERE):
     """Runs `command`, its output shown as it comes (prompts included) and written down, with how it
     ended. Raises CalledProcessError if it failed."""
     shown = " ".join(str(part) for part in command)
-    print("+", shown, flush=True)
-    note(f"+ {shown}  (in {cwd})")
+    tell("run", f"+ {shown}", command=shown)
+    note(f"  (in {cwd})")
     process = subprocess.Popen(command, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     pending, quiet = b"", 0
     while True:
@@ -292,11 +352,16 @@ def main():
                         help="never build doomify-waw (or install what building needs): use the one "
                              "in doomify/ or on the PATH")
     parser.add_argument("--pack", action="store_true", help="also zip nacht-waw/ into nacht-waw.pk3")
+    parser.add_argument("--computer-speak", action="store_true",
+                        help="say what it does plainly and formally, rather than as a descent through hell")
     parser.add_argument("--no-setup", action="store_true",
                         help="don't set up the Nacht des Schreckens profile (setup-waw.toml)")
     parser.add_argument("rest", nargs="*", help="options for doomify-waw build, after --")
     args = parser.parse_args()
     note(f"=== doomify.py {' '.join(sys.argv[1:])} ===")
+    speak_in("computer-speak.toml" if args.computer_speak else "toiling-through-hell.toml")
+    tell("begin", "Rebuilding Nacht des Schreckens' World at War weapons", what="Der Riese's weapons",
+         place=OUTPUT)
 
     workspace = None if args.no_build else workspace_project()
     note(f"workspace doomify-waw: {workspace}; installed one: {installed()}")
@@ -314,7 +379,7 @@ def main():
         if not args.source:
             print("No doomify-waw in doomify/ or on the PATH: building it from source.")
         executable = from_source()
-    note(f"using doomify-waw {executable}")
+    tell("found", f"Using doomify-waw: {executable}", what="doomify-waw", place=executable)
     run([executable, "build", FOLDER, *args.rest])
     if args.pack:
         pack()
@@ -327,8 +392,9 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-        note("done")
+        tell("done", "Done.", what="Der Riese's weapons")
     except subprocess.CalledProcessError as error:
-        note(f"failed: {error}")
-        sys.exit(f"doomify failed: {error}\nWhat it did is in {JOURNAL}")
-    print(f"What it did is in {JOURNAL}")
+        tell("problem", f"doomify failed: {error}", problem=error)
+        tell("journal", f"What it did is in {JOURNAL}", place=JOURNAL)
+        sys.exit(1)
+    tell("journal", f"What it did is in {JOURNAL}", place=JOURNAL)
