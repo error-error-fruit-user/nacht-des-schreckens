@@ -210,6 +210,10 @@ struct Cli {
     /// the song (put back as tdl's though another was picked since) and the profiles
     #[arg(long)]
     reinstall: bool,
+    /// Pulls and renders every weapon again (doomify.py with doomify-waw's --force), though they
+    /// were built and are in the cache; needs World at War running
+    #[arg(long)]
+    rerender: bool,
     /// Makes a shortcut on the desktop that opens tdl on the install's loadout, with the system's
     /// lock icon
     #[arg(long)]
@@ -337,6 +341,12 @@ fn plan(cli: &Cli, dir: &Path, art: &Path) -> Vec<String> {
     if !cli.no_song && !steps.done("song") {
         lines.push(format!("  - {}", SONG.warning));
     }
+    if !cli.no_doomify && cli.rerender {
+        lines.push(
+            "  - pull and render every weapon again from World at War (--rerender), though they are built and in the cache: an hour or more"
+                .into(),
+        );
+    }
     if !cli.no_doomify {
         lines.push(
             "  - if World at War is running, run doomify.py, which rebuilds the weapons from your game (about an hour the first time) and may install git and Rust to build doomify-waw"
@@ -374,7 +384,7 @@ fn plan(cli: &Cli, dir: &Path, art: &Path) -> Vec<String> {
     }
     lines.push(String::new());
     lines.push(
-        "To change that, here or after the y: --mode in-place|user, --dir and --artifacts say where, --no-tdl, --no-uzdoom, --no-freedoom, --no-blender, --no-song, --no-doomify and --no-play leave those out, --reinstall does everything again, --waw DIR and --blender PATH say where World at War and Blender are, --desktop-shortcut and --menu-entry make shortcuts, and --computer-speak speaks plainly."
+        "To change that, here or after the y: --mode in-place|user, --dir and --artifacts say where, --no-tdl, --no-uzdoom, --no-freedoom, --no-blender, --no-song, --no-doomify and --no-play leave those out, --reinstall does everything again, --rerender renders every weapon again, --waw DIR and --blender PATH say where World at War and Blender are, --desktop-shortcut and --menu-entry make shortcuts, and --computer-speak speaks plainly."
             .into(),
     );
     lines
@@ -466,12 +476,12 @@ fn run(mut cli: Cli) -> Outcome<()> {
     };
     note!("blender: {:?}", blender);
     let built = dir.join("wads").join("nacht-waw.pk3");
-    if !cli.no_doomify && steps.done("weapons") && built.is_file() {
+    if !cli.no_doomify && !cli.rerender && steps.done("weapons") && built.is_file() {
         journal::section("weapons");
         steps.skip("nacht-waw.pk3", &built.display().to_string());
     } else if !cli.no_doomify
         && let Some(python) = python
-        && doomify(&python, &home, &dir, blender.as_deref())
+        && doomify(&python, &home, &dir, blender.as_deref(), cli.rerender)
     {
         steps.finish("weapons");
     }
@@ -1245,7 +1255,13 @@ fn unpack_zip(file: &Path, folder: &Path) -> Outcome<()> {
 /// Runs doomify.py in `home` when World at War is running, then puts the packed
 /// `nacht-waw.pk3` in the wad pool. Nothing here is an error: the rest is installed, and the
 /// command to run later is printed.
-fn doomify(python: &OsString, home: &Path, dir: &Path, blender: Option<&Path>) -> bool {
+fn doomify(
+    python: &OsString,
+    home: &Path,
+    dir: &Path,
+    blender: Option<&Path>,
+    rerender: bool,
+) -> bool {
     // 📦 packed straight into the wad pool, one step rather than a pack and a copy
     let packed = dir.join("wads").join("nacht-waw.pk3");
     let mut args: Vec<OsString> = vec![
@@ -1254,6 +1270,9 @@ fn doomify(python: &OsString, home: &Path, dir: &Path, blender: Option<&Path>) -
         packed.clone().into(),
         "--accept".into(),
     ];
+    if rerender {
+        args.push("--rerender".into());
+    }
     if let Some(blender) = blender {
         args.extend(["--".into(), "--blender".into(), blender.into()]);
     }

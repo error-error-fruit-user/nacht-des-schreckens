@@ -179,6 +179,9 @@ def plan(args):
                      + " into songs/ in the artifacts and makes it tdl's song, for every loadout. It is "
                      "heavy metal: tdl's splash will open on down-tuned riffs and screaming, so mind "
                      "your speakers (--no-song keeps the music you have)")
+    if not args.no_doomify and args.rerender:
+        lines.append("    - pulls and renders every weapon again from World at War (--rerender), though "
+                     "they are built and in the cache: an hour or more")
     if not args.no_doomify:
         lines.append("    - if World at War is running with Der Riese loaded, runs doomify.py, which "
                      "rebuilds the weapons from your game into nacht-waw.pk3 (about an hour the first "
@@ -194,7 +197,7 @@ def plan(args):
                  "--source builds only for this machine, --no-tdl, --no-uzdoom, --no-freedoom, "
                  "--no-blender, --no-doomify and --no-song leave those out, --waw DIR says where World "
                  "at War is, --blender PATH uses your Blender, --mode in-place|user and --dir "
-                 "say where, --desktop-shortcut and --menu-entry make shortcuts, --reinstall does it all again, and --computer-speak "
+                 "say where, --desktop-shortcut and --menu-entry make shortcuts, --reinstall does it all again, --rerender renders every weapon again, and --computer-speak "
                  "speaks plainly.")
     return lines
 
@@ -264,7 +267,7 @@ def parser():
     passed.add_argument("--mode", choices=["in-place", "user"], default="in-place")
     passed.add_argument("--dir")
     for flag in ("--no-tdl", "--no-uzdoom", "--no-freedoom", "--no-blender", "--no-doomify",
-                 "--no-song", "--desktop-shortcut", "--menu-entry"):
+                 "--no-song", "--rerender", "--desktop-shortcut", "--menu-entry"):
         passed.add_argument(flag, action="store_true")
     passed.add_argument("--blender", metavar="PATH")
     passed.add_argument("--waw", metavar="DIR")
@@ -301,6 +304,7 @@ def main():
                                       ("--no-doomify", args.no_doomify),
                                       ("--no-song", args.no_song),
                                       ("--reinstall", args.reinstall),
+                                      ("--rerender", args.rerender),
                                       ("--desktop-shortcut", args.desktop_shortcut),
                                       ("--menu-entry", args.menu_entry)) if on]
     groans.run(command, cwd=HERE, voiced=True)

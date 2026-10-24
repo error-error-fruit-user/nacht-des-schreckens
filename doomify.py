@@ -288,6 +288,9 @@ def main():
     parser.add_argument("--no-setup", action="store_true",
                         help="don't set up the Nacht des Schreckens profile (setup-waw.toml)")
     parser.add_argument("rest", nargs="*", help="options for doomify-waw build, after --")
+    parser.add_argument("--rerender", action="store_true",
+                        help="pull and render every weapon again, though the cache has them "
+                             "(doomify-waw's --force)")
     parser.add_argument("--accept", action="store_true",
                         help="install what building doomify-waw needs without asking")
     args = parser.parse_args()
@@ -316,7 +319,7 @@ def main():
             groans.other(f"note: no doomify-waw in {ARTIFACTS} or on the PATH: building it from source")
         executable = from_source()
     groans.note(f"using doomify-waw: {executable}")
-    groans.run([executable, "build", FOLDER, *args.rest])
+    groans.run([executable, "build", FOLDER, *(["--force"] if args.rerender else []), *args.rest])
     if args.pack or args.pack_to:
         pack(args.pack_to)
     if not args.no_setup:
