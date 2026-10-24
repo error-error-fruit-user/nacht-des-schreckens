@@ -13,5 +13,7 @@ __pycache__/
 # and doomify-waw and hell-hound, cloned and built by doomify.py --source
 /doomify/doomify-waw
 /doomify/doomify-waw.exe
+# doomify.py's journal of what it did
+/doomify/doomify.log
 /doomify/src/
 /installer/target

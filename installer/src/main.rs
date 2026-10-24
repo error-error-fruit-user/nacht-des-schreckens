@@ -24,6 +24,9 @@
 //! SHA-256, unless it is installed already) in `blender/`. Then, if World at War is running with
 //! Der Riese loaded, it runs `doomify.py`, which takes about an hour the first time.
 
+#[macro_use]
+mod journal;
+
 use std::{
     ffi::OsString,
     fs,
@@ -193,7 +196,7 @@ fn main() -> ExitCode {
     match run(&cli) {
         Ok(()) => ExitCode::SUCCESS,
         Err(problem) => {
-            eprintln!("{problem}");
+            warn!("{problem}");
             ExitCode::FAILURE
         }
     }
@@ -223,8 +226,20 @@ fn run(cli: &Cli) -> Outcome<()> {
             ));
         }
     }
-    println!("Installing Nacht des Schreckens in {}", dir.display());
     fs::create_dir_all(&dir).map_err(|error| format!("{}: {error}", dir.display()))?;
+    // 📓 from here on the journal is kept in the install's folder
+    let journal = journal::open(&dir, "nacht-install.log");
+    say!("Installing Nacht des Schreckens in {}", dir.display());
+    note!("this program is in {}", here.display());
+    note!(
+        "mode {mode:?}; leaving out: tdl {}, uzdoom {}, freedoom {}, blender {}, doomify {}; yes to everything: {}",
+        cli.no_tdl,
+        cli.no_uzdoom,
+        cli.no_freedoom,
+        cli.no_blender,
+        cli.no_doomify,
+        cli.yes
+    );
 
     let scratch = Scratch::new();
     if !cli.no_tdl {
@@ -235,7 +250,7 @@ fn run(cli: &Cli) -> Outcome<()> {
 
     let python = find_python();
     if python.is_none() {
-        println!(
+        say!(
             "Python 3 wasn't found, and doomify.py needs it: install it (python.org), then run it in {}",
             home.display()
         );
@@ -245,13 +260,17 @@ fn run(cli: &Cli) -> Outcome<()> {
         None if cli.no_blender => find_blender(&dir),
         None => ensure_blender(&dir, cli.yes)?,
     };
+    note!("blender: {:?}", blender);
     if !cli.no_doomify {
         if let Some(python) = python {
             doomify(&python, &home, &dir, blender.as_deref(), cli.yes);
         }
     }
-    println!("\nDone. In tdl, make a profile with horde-hammer.pk3, nacht.pk3 and then nacht-waw.pk3");
-    println!("(wads/ in {} is a wad pool tdl offers).", dir.display());
+    if let Some(journal) = &journal {
+        say!("Everything this install did is in {}", journal.display());
+    }
+    say!("\nDone. In tdl, make a profile with horde-hammer.pk3, nacht.pk3 and then nacht-waw.pk3");
+    say!("(wads/ in {} is a wad pool tdl offers).", dir.display());
     Ok(())
 }
 
@@ -263,21 +282,38 @@ fn asset(name: &str) -> String {
 /// Gets the program `name` into `to`: copied from beside this program (as `name`, `name.exe` or
 /// `name.AppImage`), or from the workspace's own release of `repository` (see [`from_workspace`]),
 /// or else downloaded from its latest release on GitHub.
-fn get_tool(here: &Path, name: &str, repository: &str, to: &Path, scratch: &Scratch) -> Outcome<()> {
+fn get_tool(
+    here: &Path,
+    name: &str,
+    repository: &str,
+    to: &Path,
+    scratch: &Scratch,
+) -> Outcome<()> {
     let candidates = [name.to_string(), format!("{name}.exe"), asset(name)];
     let project = repository.rsplit('/').next().unwrap_or(repository);
-    if let Some(beside) = candidates.iter().map(|n| here.join(n)).find(|path| path.is_file()) {
+    if let Some(beside) = candidates
+        .iter()
+        .map(|n| here.join(n))
+        .find(|path| path.is_file())
+    {
+        note!("{name}: the one beside this program, {}", beside.display());
         copy_whole(&beside, to)?;
     } else if let Some(built) = from_workspace(here, project, name) {
-        println!("{name}: {}", built.display());
+        say!("{name}: {}", built.display());
+        note!("{name}: the workspace's release, {}", built.display());
         copy_whole(&built, to)?;
     } else {
-        let url = format!("{RELEASES}/{repository}/releases/latest/download/{}", asset(name));
-        println!("{name} isn't next to this program, so it is downloaded: {url}");
+        let url = format!(
+            "{RELEASES}/{repository}/releases/latest/download/{}",
+            asset(name)
+        );
+        say!("{name} isn't next to this program, so it is downloaded: {url}");
         let file = fetch_unpinned(&url, &asset(name), scratch)?;
         copy_whole(&file, to)?;
     }
-    make_executable(to)
+    make_executable(to)?;
+    note!("{name} is at {}", to.display());
+    Ok(())
 }
 
 /// The workspace's own release of the program `name`, when this program runs from a project's
@@ -291,7 +327,11 @@ fn from_workspace(here: &Path, project: &str, name: &str) -> Option<PathBuf> {
         return None;
     }
     let workspace = published.parent()?.parent()?;
-    let path = workspace.join(project).join("published").join("releases").join(asset(name));
+    let path = workspace
+        .join(project)
+        .join("published")
+        .join("releases")
+        .join(asset(name));
     path.is_file().then_some(path)
 }
 
@@ -305,10 +345,19 @@ fn install_tdl(here: &Path, dir: &Path, mode: Mode, cli: &Cli, scratch: &Scratch
     get_tool(here, "tdl", TDL_REPOSITORY, &tdl, scratch)?;
     if mode == Mode::InPlace {
         // 🧱 in place there is no copying: tdl is simply put where it will live
-        copy_whole(&tdl, &dir.join(if cfg!(windows) { "tdl.exe" } else { "tdl" }))?;
+        copy_whole(
+            &tdl,
+            &dir.join(if cfg!(windows) { "tdl.exe" } else { "tdl" }),
+        )?;
         make_executable(&dir.join(if cfg!(windows) { "tdl.exe" } else { "tdl" }))?;
     }
-    println!("Running tdl-install");
+    say!("Running tdl-install");
+    note!(
+        "running {} --mode {} --dir {}",
+        installer.display(),
+        mode.flag(),
+        dir.display()
+    );
     let mut command = Command::new(&installer);
     // 📦 the installer is its own AppImage, if it is one
     command.env_remove("APPIMAGE");
@@ -322,6 +371,7 @@ fn install_tdl(here: &Path, dir: &Path, mode: Mode, cli: &Cli, scratch: &Scratch
     let status = command
         .status()
         .map_err(|error| format!("couldn't run {}: {error}", installer.display()))?;
+    note!("tdl-install ended: {status}");
     if status.success() {
         Ok(())
     } else {
@@ -335,20 +385,29 @@ fn place_files(here: &Path, dir: &Path, home: &Path, scratch: &Scratch) -> Outco
     let wads = dir.join("wads");
     for pk3 in PK3S {
         copy_whole(&here.join(pk3), &wads.join(pk3))?;
-        println!("{pk3}: {}", wads.join(pk3).display());
+        say!("{pk3}: {}", wads.join(pk3).display());
     }
     for (inside, contents) in embedded::FILES {
         write_text(&home.join(inside), contents)?;
     }
-    let to = home
-        .join("doomify")
-        .join(if cfg!(windows) { "doomify-waw.exe" } else { "doomify-waw" });
+    note!(
+        "wrote doomify.py and its {} settings into {}",
+        embedded::FILES.len() - 1,
+        home.display()
+    );
+    let to = home.join("doomify").join(if cfg!(windows) {
+        "doomify-waw.exe"
+    } else {
+        "doomify-waw"
+    });
     // Not fatal: without it doomify.py builds doomify-waw from its source (git and cargo)
     if let Err(problem) = get_tool(here, "doomify-waw", DOOMIFY_REPOSITORY, &to, scratch) {
-        eprintln!("{problem}\ndoomify-waw wasn't installed, so doomify.py will try to build it from source (it needs git and cargo)");
+        warn!(
+            "{problem}\ndoomify-waw wasn't installed, so doomify.py will try to build it from source (it needs git and cargo)"
+        );
     }
     unpack_sprites(&here.join("nacht.pk3"), &home.join("nacht"))?;
-    println!("doomify.py: {}", home.display());
+    say!("doomify.py: {}", home.display());
     Ok(())
 }
 
@@ -358,9 +417,12 @@ fn unpack_sprites(pk3: &Path, folder: &Path) -> Outcome<()> {
     let mut archive = zip::ZipArchive::new(fs::File::open(pk3).map_err(|e| problem(&e))?)
         .map_err(|e| problem(&e))?;
     let _ = fs::remove_dir_all(folder);
+    let mut count = 0;
     for index in 0..archive.len() {
         let mut entry = archive.by_index(index).map_err(|e| problem(&e))?;
-        let Some(name) = entry.enclosed_name() else { continue };
+        let Some(name) = entry.enclosed_name() else {
+            continue;
+        };
         if entry.is_dir() || !name.starts_with("sprites") {
             continue;
         }
@@ -370,7 +432,13 @@ fn unpack_sprites(pk3: &Path, folder: &Path) -> Outcome<()> {
         }
         let mut file = fs::File::create(&to).map_err(|e| format!("{}: {e}", to.display()))?;
         io::copy(&mut entry, &mut file).map_err(|e| format!("{}: {e}", to.display()))?;
+        count += 1;
     }
+    note!(
+        "took {count} sprites out of {} into {}",
+        pk3.display(),
+        folder.display()
+    );
     Ok(())
 }
 
@@ -386,8 +454,14 @@ fn copy_whole(from: &Path, to: &Path) -> Outcome<()> {
     let mut part = to.as_os_str().to_os_string();
     part.push(".part");
     let part = PathBuf::from(part);
-    fs::copy(from, &part).map_err(problem)?;
-    fs::rename(&part, to).map_err(problem)
+    let bytes = fs::copy(from, &part).map_err(problem)?;
+    fs::rename(&part, to).map_err(problem)?;
+    note!(
+        "copied {} to {} ({bytes} bytes)",
+        from.display(),
+        to.display()
+    );
+    Ok(())
 }
 
 /// Writes `contents` to `to`, by way of `<to>.part`.
@@ -432,6 +506,12 @@ fn make_executable(path: &Path) -> Outcome<()> {
 
 /// The Python 3 that runs doomify.py, if one is installed.
 fn find_python() -> Option<OsString> {
+    let found = find_python_quietly();
+    note!("python: {:?}", found);
+    found
+}
+
+fn find_python_quietly() -> Option<OsString> {
     let candidates: &[&str] = if cfg!(windows) {
         &["python", "py"]
     } else {
@@ -452,7 +532,10 @@ fn find_blender(dir: &Path) -> Option<PathBuf> {
     if let Some(ours) = blender_in(&dir.join("blender")) {
         return Some(ours);
     }
-    if let Some(path) = std::env::var_os("BLENDER").map(PathBuf::from).filter(|p| p.is_file()) {
+    if let Some(path) = std::env::var_os("BLENDER")
+        .map(PathBuf::from)
+        .filter(|p| p.is_file())
+    {
         return Some(path);
     }
     let works = Command::new("blender")
@@ -465,7 +548,11 @@ fn find_blender(dir: &Path) -> Option<PathBuf> {
 
 /// The Blender executable under `folder` (one level down, where the release unpacks), if any.
 fn blender_in(folder: &Path) -> Option<PathBuf> {
-    let name = if cfg!(windows) { "blender.exe" } else { "blender" };
+    let name = if cfg!(windows) {
+        "blender.exe"
+    } else {
+        "blender"
+    };
     fs::read_dir(folder)
         .ok()?
         .filter_map(|entry| entry.ok())
@@ -476,7 +563,7 @@ fn blender_in(folder: &Path) -> Option<PathBuf> {
 /// Finds Blender or, if the user agrees, downloads it into `<dir>/blender/`.
 fn ensure_blender(dir: &Path, yes: bool) -> Outcome<Option<PathBuf>> {
     if let Some(found) = find_blender(dir) {
-        println!("Blender: {}", found.display());
+        say!("Blender: {}", found.display());
         return Ok(Some(found));
     }
     let download = if cfg!(all(windows, target_arch = "x86_64")) {
@@ -484,7 +571,7 @@ fn ensure_blender(dir: &Path, yes: bool) -> Outcome<Option<PathBuf>> {
     } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
         &BLENDER_LINUX
     } else {
-        println!("Blender has no pinned release here: install it (blender.org) for doomify.py");
+        say!("Blender has no pinned release here: install it (blender.org) for doomify.py");
         return Ok(None);
     };
     let question = format!(
@@ -493,23 +580,31 @@ fn ensure_blender(dir: &Path, yes: bool) -> Outcome<Option<PathBuf>> {
         dir.join("blender").display()
     );
     if !(yes || ask_yes(&question)) {
-        println!("Skipped Blender; doomify.py needs it (blender.org, or --blender PATH).");
+        say!("Skipped Blender; doomify.py needs it (blender.org, or --blender PATH).");
         return Ok(None);
     }
     let scratch = Scratch::new();
     let file = fetch(download, &scratch)?;
     let folder = dir.join("blender");
+    note!("unpacking {} into {}", download.name, folder.display());
     let part = dir.join("blender.part");
     let _ = fs::remove_dir_all(&part);
     fs::create_dir_all(&part).map_err(|error| format!("{}: {error}", part.display()))?;
     let unpacked = if download.name.ends_with(".zip") {
         unpack_zip(&file, &part)
     } else {
-        let status = Command::new("tar").arg("-xJf").arg(&file).arg("-C").arg(&part).status();
+        let status = Command::new("tar")
+            .arg("-xJf")
+            .arg(&file)
+            .arg("-C")
+            .arg(&part)
+            .status();
         match status {
             Ok(status) if status.success() => Ok(()),
             Ok(status) => Err(format!("tar failed ({status})")),
-            Err(error) => Err(format!("couldn't run tar (needed to unpack Blender): {error}")),
+            Err(error) => Err(format!(
+                "couldn't run tar (needed to unpack Blender): {error}"
+            )),
         }
     };
     if let Err(problem) = unpacked {
@@ -519,7 +614,7 @@ fn ensure_blender(dir: &Path, yes: bool) -> Outcome<Option<PathBuf>> {
     let _ = fs::remove_dir_all(&folder);
     fs::rename(&part, &folder).map_err(|error| format!("{}: {error}", folder.display()))?;
     let found = blender_in(&folder).ok_or("Blender unpacked, but its executable isn't there")?;
-    println!("Blender: {}", found.display());
+    say!("Blender: {}", found.display());
     Ok(Some(found))
 }
 
@@ -557,7 +652,7 @@ fn doomify(python: &OsString, home: &Path, dir: &Path, blender: Option<&Path>, y
     }
     let later = || {
         let shown: Vec<_> = args.iter().map(|arg| arg.to_string_lossy()).collect();
-        println!(
+        say!(
             "To make the weapons later, start World at War, load Der Riese in solo Zombies, and run in {}:\n  {} {}",
             home.display(),
             python.to_string_lossy(),
@@ -572,20 +667,29 @@ fn doomify(python: &OsString, home: &Path, dir: &Path, blender: Option<&Path>, y
         later();
         return;
     }
+    note!(
+        "running {} {} in {}",
+        python.to_string_lossy(),
+        args.iter()
+            .map(|arg| arg.to_string_lossy())
+            .collect::<Vec<_>>()
+            .join(" "),
+        home.display()
+    );
     match Command::new(python).args(&args).current_dir(home).status() {
         Ok(status) if status.success() => {
             let pk3 = home.join("nacht-waw.pk3");
             match copy_whole(&pk3, &dir.join("wads").join("nacht-waw.pk3")) {
-                Ok(()) => println!("nacht-waw.pk3: {}", dir.join("wads").display()),
-                Err(problem) => eprintln!("{problem}"),
+                Ok(()) => say!("nacht-waw.pk3: {}", dir.join("wads").display()),
+                Err(problem) => warn!("{problem}"),
             }
         }
         Ok(status) => {
-            eprintln!("doomify.py failed ({status}).");
+            warn!("doomify.py failed ({status}).");
             later();
         }
         Err(error) => {
-            eprintln!("Couldn't run doomify.py: {error}");
+            warn!("Couldn't run doomify.py: {error}");
             later();
         }
     }
@@ -599,19 +703,30 @@ fn ask_yes(question: &str) -> bool {
     print!("{question} [y/N] ");
     let _ = io::stdout().flush();
     let mut line = String::new();
-    io::stdin().read_line(&mut line).is_ok() && matches!(line.trim().to_lowercase().as_str(), "y" | "yes")
+    io::stdin().read_line(&mut line).is_ok()
+        && matches!(line.trim().to_lowercase().as_str(), "y" | "yes")
 }
 
 /// Asks where nacht should live. Enter takes in place; input that ends takes it too.
 fn ask_mode(here: &Path) -> Mode {
-    println!("Where should Nacht des Schreckens be installed?");
-    println!("  1) In place: in {}, nothing else changes (default)", here.display());
-    for (number, mode, who) in [(2, Mode::User, "For you"), (3, Mode::System, "For everyone")] {
+    say!("Where should Nacht des Schreckens be installed?");
+    say!(
+        "  1) In place: in {}, nothing else changes (default)",
+        here.display()
+    );
+    for (number, mode, who) in [
+        (2, Mode::User, "For you"),
+        (3, Mode::System, "For everyone"),
+    ] {
         let folder = install_dir(mode, here)
             .map(|dir| dir.display().to_string())
             .unwrap_or_else(|_| "?".into());
-        let note = if mode == Mode::System { "; needs root" } else { "" };
-        println!("  {number}) {who}: in {folder}, with the tdl command on your PATH{note}");
+        let note = if mode == Mode::System {
+            "; needs root"
+        } else {
+            ""
+        };
+        say!("  {number}) {who}: in {folder}, with the tdl command on your PATH{note}");
     }
     loop {
         print!("Choice [1]: ");
@@ -623,7 +738,7 @@ fn ask_mode(here: &Path) -> Mode {
         }
         match parse_choice(&line) {
             Some(mode) => return mode,
-            None => println!("Type 1, 2 or 3."),
+            None => say!("Type 1, 2 or 3."),
         }
     }
 }
@@ -686,7 +801,7 @@ fn fetch(download: &Download, scratch: &Scratch) -> Outcome<PathBuf> {
         match fetch_from(download, url, scratch) {
             Ok(path) => return Ok(path),
             Err(problem) => {
-                eprintln!("{problem}");
+                warn!("{problem}");
                 last = problem;
             }
         }
@@ -698,21 +813,35 @@ fn fetch(download: &Download, scratch: &Scratch) -> Outcome<PathBuf> {
 /// must not be empty.
 fn fetch_unpinned(url: &str, name: &str, scratch: &Scratch) -> Outcome<PathBuf> {
     let path = scratch.dir()?.join("download").join(name);
+    note!(
+        "downloading {url} (no hash to check it against) to {}",
+        path.display()
+    );
     let failed = |error: &dyn std::fmt::Display| format!("downloading {url}: {error}");
     fs::create_dir_all(path.parent().unwrap_or(Path::new("."))).map_err(|e| failed(&e))?;
-    let mut reader = ureq::get(url).call().map_err(|e| failed(&e))?.into_body().into_reader();
+    let mut reader = ureq::get(url)
+        .call()
+        .map_err(|e| failed(&e))?
+        .into_body()
+        .into_reader();
     let mut file = fs::File::create(&path).map_err(|e| failed(&e))?;
     let total = io::copy(&mut reader, &mut file).map_err(|e| failed(&e))?;
     file.sync_all().map_err(|e| failed(&e))?;
     if total == 0 {
         return Err(failed(&"it is empty"));
     }
-    println!("{name}: {} MB", total / 1_000_000);
+    say!("{name}: {} MB", total / 1_000_000);
     Ok(path)
 }
 
 fn fetch_from(download: &Download, url: &str, scratch: &Scratch) -> Outcome<PathBuf> {
     let path = scratch.dir()?.join(download.name);
+    note!(
+        "downloading {url} ({} bytes, SHA-256 {}) to {}",
+        download.size,
+        download.sha256,
+        path.display()
+    );
     let failed = |error: &dyn std::fmt::Display| format!("downloading {url}: {error}");
     let mut reader = ureq::get(url)
         .call()
@@ -734,7 +863,8 @@ fn fetch_from(download: &Download, url: &str, scratch: &Scratch) -> Outcome<Path
             return Err(failed(&"it is bigger than it should be"));
         }
         hasher.update(&buf[..read]);
-        file.write_all(&buf[..read]).map_err(|error| failed(&error))?;
+        file.write_all(&buf[..read])
+            .map_err(|error| failed(&error))?;
         let percent = total * 100 / download.size;
         if percent != shown {
             shown = percent;
@@ -746,9 +876,15 @@ fn fetch_from(download: &Download, url: &str, scratch: &Scratch) -> Outcome<Path
     if total != download.size {
         return Err(failed(&"it ended early"));
     }
-    if hex(&hasher.finalize()) != download.sha256 {
+    let hash = hex(&hasher.finalize());
+    if hash != download.sha256 {
+        note!("{} came with SHA-256 {hash}", download.name);
         return Err(failed(&"it isn't the file it should be (its hash differs)"));
     }
+    note!(
+        "{}: {total} bytes, and its hash is the one it should be",
+        download.name
+    );
     Ok(path)
 }
 
@@ -812,12 +948,17 @@ mod tests {
         let pk3 = dir.join("nacht.pk3");
         let mut writer = zip::ZipWriter::new(fs::File::create(&pk3).unwrap());
         for (name, contents) in [("sprites/a/ABCDA0.png", &b"png"[..]), ("MAPINFO.txt", b"x")] {
-            writer.start_file(name, zip::write::SimpleFileOptions::default()).unwrap();
+            writer
+                .start_file(name, zip::write::SimpleFileOptions::default())
+                .unwrap();
             writer.write_all(contents).unwrap();
         }
         writer.finish().unwrap();
         unpack_sprites(&pk3, &dir.join("out")).unwrap();
-        assert_eq!(fs::read(dir.join("out/sprites/a/ABCDA0.png")).unwrap(), b"png");
+        assert_eq!(
+            fs::read(dir.join("out/sprites/a/ABCDA0.png")).unwrap(),
+            b"png"
+        );
         assert!(!dir.join("out/MAPINFO.txt").exists());
         let _ = fs::remove_dir_all(&dir);
     }
@@ -826,10 +967,17 @@ mod tests {
     fn blender_is_found_one_folder_down() {
         let dir = altar("blender");
         assert_eq!(blender_in(&dir), None);
-        let name = if cfg!(windows) { "blender.exe" } else { "blender" };
+        let name = if cfg!(windows) {
+            "blender.exe"
+        } else {
+            "blender"
+        };
         fs::create_dir_all(dir.join("blender-4.2.9-linux-x64")).unwrap();
         fs::write(dir.join("blender-4.2.9-linux-x64").join(name), b"").unwrap();
-        assert_eq!(blender_in(&dir), Some(dir.join("blender-4.2.9-linux-x64").join(name)));
+        assert_eq!(
+            blender_in(&dir),
+            Some(dir.join("blender-4.2.9-linux-x64").join(name))
+        );
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -840,17 +988,39 @@ mod tests {
         assert_eq!(embedded::DOOMIFY_PY, embedded::FILES[0].1);
         assert!(embedded::DOOMIFY_DOOMIFY_TOML.source.contains("prefix"));
         assert_eq!(embedded::DOOMIFY_DOOMIFY_TOML.path, "doomify/doomify.toml");
-        assert!(embedded::WEAPONS.iter().any(|(name, _)| *name == "doomify/weapons/colt.toml"));
-        assert!(embedded::WEAPONS.contains(&("doomify/weapons/colt.toml", embedded::DOOMIFY_WEAPONS_COLT_TOML.source)));
-        assert!(embedded::SOUNDS.iter().all(|(name, _)| name.starts_with("doomify/sounds/")));
+        assert!(
+            embedded::WEAPONS
+                .iter()
+                .any(|(name, _)| *name == "doomify/weapons/colt.toml")
+        );
+        assert!(embedded::WEAPONS.contains(&(
+            "doomify/weapons/colt.toml",
+            embedded::DOOMIFY_WEAPONS_COLT_TOML.source
+        )));
+        assert!(
+            embedded::SOUNDS
+                .iter()
+                .all(|(name, _)| name.starts_with("doomify/sounds/"))
+        );
         assert!(names.contains(&"doomify/doomify.toml"));
-        assert!(names.iter().any(|name| name.starts_with("doomify/weapons/")));
-        assert!(embedded::FILES.iter().all(|(_, contents)| !contents.is_empty()));
+        assert!(
+            names
+                .iter()
+                .any(|name| name.starts_with("doomify/weapons/"))
+        );
+        assert!(
+            embedded::FILES
+                .iter()
+                .all(|(_, contents)| !contents.is_empty())
+        );
     }
 
     #[test]
     fn every_embedded_toml_parses() {
-        for (name, source) in embedded::FILES.iter().filter(|(name, _)| name.ends_with(".toml")) {
+        for (name, source) in embedded::FILES
+            .iter()
+            .filter(|(name, _)| name.ends_with(".toml"))
+        {
             assert!(source.parse::<toml::Table>().is_ok(), "{name} isn't TOML");
         }
         let colt = embedded::DOOMIFY_WEAPONS_COLT_TOML.table().unwrap();
@@ -866,7 +1036,10 @@ mod tests {
         fs::create_dir_all(&releases).unwrap();
         assert_eq!(from_workspace(&here, "tdl", "tdl"), None);
         fs::write(releases.join(asset("tdl")), b"").unwrap();
-        assert_eq!(from_workspace(&here, "tdl", "tdl"), Some(releases.join(asset("tdl"))));
+        assert_eq!(
+            from_workspace(&here, "tdl", "tdl"),
+            Some(releases.join(asset("tdl")))
+        );
         // 🏠 a folder that isn't a project's release folder has no workspace around it
         assert_eq!(from_workspace(&workspace.join("tdl"), "tdl", "tdl"), None);
         let _ = fs::remove_dir_all(&workspace);

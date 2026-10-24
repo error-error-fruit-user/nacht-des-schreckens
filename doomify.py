@@ -32,6 +32,7 @@ import shutil
 import subprocess
 import sys
 import textwrap
+import time
 import zipfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -47,13 +48,56 @@ REPOSITORIES = {
 RUST = (1, 88)
 
 
+# The journal: everything this does, with the time since it began (what it plans and is told,
+# every command and all it prints, every file it puts somewhere), added to JOURNAL on each run.
+JOURNAL = os.path.join(HERE, "doomify", "doomify.log")
+BEGAN = time.monotonic()
+# Blender's line for every frame it renders, which would bury the rest
+CHATTER = ("Fra:", "Saved:", "Time:", "Read blend")
+
+
+def note(line):
+    """Writes `line` down in the journal."""
+    os.makedirs(os.path.dirname(JOURNAL), exist_ok=True)
+    with open(JOURNAL, "a", encoding="utf-8") as journal:
+        for part in line.splitlines() or [""]:
+            journal.write(f"[{time.monotonic() - BEGAN:8.3f}s] {part}\n")
+
+
+def run(command, cwd=HERE):
+    """Runs `command`, its output shown as it comes (prompts included) and written down, with how it
+    ended. Raises CalledProcessError if it failed."""
+    shown = " ".join(str(part) for part in command)
+    print("+", shown, flush=True)
+    note(f"+ {shown}  (in {cwd})")
+    process = subprocess.Popen(command, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    pending, quiet = b"", 0
+    while True:
+        chunk = process.stdout.read1(4096)
+        if not chunk:
+            break
+        sys.stdout.buffer.write(chunk)
+        sys.stdout.buffer.flush()
+        *lines, pending = (pending + chunk).split(b"\n")
+        for line in lines:
+            text = line.decode(errors="replace").rstrip("\r")
+            if text.startswith(CHATTER):
+                quiet += 1
+            else:
+                note("  | " + text)
+    if pending:
+        note("  | " + pending.decode(errors="replace"))
+    code = process.wait()
+    if quiet:
+        note(f"  ({quiet} lines of Blender's frame by frame progress left out)")
+    note(f"  ended with code {code}")
+    if code:
+        raise subprocess.CalledProcessError(code, command)
+
+
 def executable_name():
     return "doomify-waw.exe" if platform.system() == "Windows" else "doomify-waw"
 
-
-def run(command, **options):
-    print("+", " ".join(command), flush=True)
-    subprocess.run(command, check=True, **options)
 
 
 def installed():
@@ -106,6 +150,9 @@ def warning(lines):
         os.system("")  # lets the Windows console show colors
     color = sys.stdout.isatty() and "NO_COLOR" not in os.environ
     print("\033[31m--- Warning ---\033[0m" if color else "--- Warning ---")
+    note("--- Warning ---")
+    for line in lines:
+        note(line)
     width = min(shutil.get_terminal_size().columns, 100)
     for line in lines:
         # a step's later lines line up under its text
@@ -145,7 +192,9 @@ def get_tools(git=True):
             + [f"  - {' '.join(command)}: {explain(command)}" for command in plan]
             + ["", "To skip this: install them yourself, or pass --no-build to use only a "
                    "doomify-waw that is already in doomify/ or on your PATH."])
-    if input("Install them now? [y/N] ").strip().lower() not in ("y", "yes"):
+    answer = input("Install them now? [y/N] ").strip()
+    note(f"asked to install {wanted}, the answer was {answer!r}")
+    if answer.lower() not in ("y", "yes"):
         sys.exit("Not installed: doomify-waw can't be built without them.")
     for command in plan:
         run(command)
@@ -193,6 +242,7 @@ def pack():
                 path = os.path.join(root, name)
                 archive.write(path, os.path.relpath(path, OUTPUT).replace(os.sep, "/"))
     os.replace(target + ".part", target)
+    note(f"packed {OUTPUT} into {target}")
     print("Packed", target)
 
 
@@ -207,8 +257,10 @@ def main():
     parser.add_argument("--pack", action="store_true", help="also zip nacht-waw/ into nacht-waw.pk3")
     parser.add_argument("rest", nargs="*", help="options for doomify-waw build, after --")
     args = parser.parse_args()
+    note(f"=== doomify.py {' '.join(sys.argv[1:])} ===")
 
     workspace = None if args.no_build else workspace_project()
+    note(f"workspace doomify-waw: {workspace}; installed one: {installed()}")
     if args.no_build:
         executable = installed()
         if executable is None:
@@ -223,6 +275,7 @@ def main():
         if not args.source:
             print("No doomify-waw in doomify/ or on the PATH: building it from source.")
         executable = from_source()
+    note(f"using doomify-waw {executable}")
     run([executable, "build", FOLDER, *args.rest])
     if args.pack:
         pack()
@@ -233,5 +286,8 @@ def main():
 if __name__ == "__main__":
     try:
         main()
+        note("done")
     except subprocess.CalledProcessError as error:
-        sys.exit(f"doomify failed: {error}")
+        note(f"failed: {error}")
+        sys.exit(f"doomify failed: {error}\nWhat it did is in {JOURNAL}")
+    print(f"What it did is in {JOURNAL}")

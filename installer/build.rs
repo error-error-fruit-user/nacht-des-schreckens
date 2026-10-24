@@ -4,14 +4,20 @@
 //! rebuild (`cargo build --release`) to customize. (doomify-waw and the other files in `doomify/`
 //! are not embedded.)
 
-use std::{env, fs, io, path::{Path, PathBuf}};
+use std::{
+    env, fs, io,
+    path::{Path, PathBuf},
+};
 
 fn tomls(folder: &Path, found: &mut Vec<PathBuf>) -> io::Result<()> {
     for entry in fs::read_dir(folder)? {
         let path = entry?.path();
         if path.is_dir() {
             tomls(&path, found)?;
-        } else if path.extension().is_some_and(|extension| extension == "toml") {
+        } else if path
+            .extension()
+            .is_some_and(|extension| extension == "toml")
+        {
             found.push(path);
         }
     }
@@ -31,7 +37,11 @@ fn main() -> io::Result<()> {
     let script = root.join("doomify.py");
     let mut entries = vec![("doomify.py".to_string(), script.clone())];
     for path in &files {
-        let inside = path.strip_prefix(&root).unwrap().to_string_lossy().replace('\\', "/");
+        let inside = path
+            .strip_prefix(&root)
+            .unwrap()
+            .to_string_lossy()
+            .replace('\\', "/");
         entries.push((inside, path.clone()));
     }
     let mut code = String::new();
@@ -39,9 +49,18 @@ fn main() -> io::Result<()> {
     for (inside, _) in &entries {
         let name: String = inside
             .chars()
-            .map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_uppercase() } else { '_' })
+            .map(|c| {
+                if c.is_ascii_alphanumeric() {
+                    c.to_ascii_uppercase()
+                } else {
+                    '_'
+                }
+            })
             .collect();
-        assert!(!names.contains(&name), "{inside} makes the const name {name} twice");
+        assert!(
+            !names.contains(&name),
+            "{inside} makes the const name {name} twice"
+        );
         if inside.ends_with(".toml") {
             // the macro and `Toml` are main.rs's; the path is from the repository's root
             code.push_str(&format!(
@@ -58,17 +77,36 @@ fn main() -> io::Result<()> {
         let mut table = format!("/// {doc}\npub const {title}: &[(&str, &str)] = &[\n");
         for ((inside, _), name) in entries.iter().zip(&names) {
             if keep(inside) {
-                let source = if inside.ends_with(".toml") { format!("{name}.source") } else { name.clone() };
+                let source = if inside.ends_with(".toml") {
+                    format!("{name}.source")
+                } else {
+                    name.clone()
+                };
                 table.push_str(&format!("    ({inside:?}, {source}),\n"));
             }
         }
         table.push_str("];\n");
         table
     };
-    code.push_str(&table("FILES", "Every file to install: where it goes in the install, and what is in it.", &|_| true));
-    code.push_str(&table("WEAPONS", "The weapons' settings, `doomify/weapons/*.toml`.", &|i| i.starts_with("doomify/weapons/")));
-    code.push_str(&table("SOUNDS", "The sound sets' settings, `doomify/sounds/*.toml`.", &|i| i.starts_with("doomify/sounds/")));
-    fs::write(PathBuf::from(env::var("OUT_DIR").unwrap()).join("embedded.rs"), code)?;
+    code.push_str(&table(
+        "FILES",
+        "Every file to install: where it goes in the install, and what is in it.",
+        &|_| true,
+    ));
+    code.push_str(&table(
+        "WEAPONS",
+        "The weapons' settings, `doomify/weapons/*.toml`.",
+        &|i| i.starts_with("doomify/weapons/"),
+    ));
+    code.push_str(&table(
+        "SOUNDS",
+        "The sound sets' settings, `doomify/sounds/*.toml`.",
+        &|i| i.starts_with("doomify/sounds/"),
+    ));
+    fs::write(
+        PathBuf::from(env::var("OUT_DIR").unwrap()).join("embedded.rs"),
+        code,
+    )?;
 
     println!("cargo:rerun-if-changed={}", script.display());
     println!("cargo:rerun-if-changed={}", folder.display());
