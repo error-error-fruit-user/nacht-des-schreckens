@@ -17,7 +17,11 @@ missing and can all be installed at once. Released executables are on doomify-wa
 GitHub releases. Anything after the options goes to doomify-waw build (--help lists them: --force
 renders everything again, --blender PATH picks Blender).
 
-  python3 doomify.py [--source] [--pack] [-- doomify-waw build options]
+  python3 doomify.py [--source | --no-build] [--pack] [-- doomify-waw build options]
+
+Before installing anything it says, under a red warning, exactly what will run, and asks.
+--no-build never builds doomify-waw (nor installs what building needs): it uses the one in
+doomify/ or on the PATH.
 """
 
 import argparse
@@ -27,6 +31,7 @@ import re
 import shutil
 import subprocess
 import sys
+import textwrap
 import zipfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -95,6 +100,34 @@ def install_plan(missing_git, missing_rust):
     return commands
 
 
+def warning(lines):
+    """`lines` under a red '--- Warning ---' (plain where the output isn't a terminal)."""
+    if platform.system() == "Windows":
+        os.system("")  # lets the Windows console show colors
+    color = sys.stdout.isatty() and "NO_COLOR" not in os.environ
+    print("\033[31m--- Warning ---\033[0m" if color else "--- Warning ---")
+    width = min(shutil.get_terminal_size().columns, 100)
+    for line in lines:
+        # a step's later lines line up under its text
+        hang = len(line) - len(line.lstrip(" -"))
+        print(textwrap.fill(line, width, subsequent_indent=" " * hang,
+                            break_on_hyphens=False, break_long_words=False) if line else "")
+    print()
+
+
+def explain(command):
+    """What one of install_plan's commands does, in words."""
+    if command[0] == "rustup":
+        return "updates your Rust to the newest stable release"
+    if command[0] == "sh":
+        return ("downloads rustup.rs's installer and runs it, which installs Rust's stable toolchain "
+                "into ~/.rustup and ~/.cargo and adds ~/.cargo/bin to your PATH in your shell's "
+                "profile")
+    manager = command[1] if command[0] == "sudo" else command[0]
+    return (f"installs git with your system's package manager ({manager})"
+            + (", as root, asking for your password" if command[0] == "sudo" else ""))
+
+
 def get_tools(git=True):
     """git (unless not needed) and a new enough cargo, installed after asking when they can all be
     at once."""
@@ -108,9 +141,10 @@ def get_tools(git=True):
     if plan is None or not sys.stdin.isatty():
         sys.exit(f"Building doomify-waw needs {wanted}: install them (git-scm.com, rustup.rs) and run"
                  " this again, or put doomify-waw from its GitHub releases in doomify/")
-    print(f"Building doomify-waw needs {wanted}, which these commands install:")
-    for command in plan:
-        print("  " + " ".join(command))
+    warning([f"Building doomify-waw needs {wanted}. Saying yes will run:"]
+            + [f"  - {' '.join(command)}: {explain(command)}" for command in plan]
+            + ["", "To skip this: install them yourself, or pass --no-build to use only a "
+                   "doomify-waw that is already in doomify/ or on your PATH."])
     if input("Install them now? [y/N] ").strip().lower() not in ("y", "yes"):
         sys.exit("Not installed: doomify-waw can't be built without them.")
     for command in plan:
@@ -167,12 +201,19 @@ def main():
     parser.add_argument("--source", action="store_true",
                         help="build doomify-waw from its repository instead of using an installed "
                              "one (the workspace's checkout is always built first when there is one)")
+    parser.add_argument("--no-build", action="store_true",
+                        help="never build doomify-waw (or install what building needs): use the one "
+                             "in doomify/ or on the PATH")
     parser.add_argument("--pack", action="store_true", help="also zip nacht-waw/ into nacht-waw.pk3")
     parser.add_argument("rest", nargs="*", help="options for doomify-waw build, after --")
     args = parser.parse_args()
 
-    workspace = workspace_project()
-    if workspace is not None:
+    workspace = None if args.no_build else workspace_project()
+    if args.no_build:
+        executable = installed()
+        if executable is None:
+            sys.exit("--no-build: there is no doomify-waw in doomify/ or on the PATH")
+    elif workspace is not None:
         print(f"Building doomify-waw from the workspace: {workspace}")
         get_tools(git=False)
         executable = build(workspace)
