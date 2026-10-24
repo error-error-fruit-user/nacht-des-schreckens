@@ -246,6 +246,43 @@ def pack():
     print("Packed", target)
 
 
+def find_tdl():
+    """tdl, the workspace's first (../tdl/published/releases/), else the one beside nacht-install
+    put it (the install's folder), else the one on the PATH."""
+    names = ["tdl.exe"] if platform.system() == "Windows" else ["tdl", "tdl.AppImage"]
+    for folder in (os.path.join(WORKSPACE, "tdl", "published", "releases"), WORKSPACE):
+        for name in names:
+            path = os.path.join(folder, name)
+            if os.path.isfile(path):
+                return os.path.normpath(path)
+    return shutil.which("tdl")
+
+
+def set_up_schreckens():
+    """Sets up the Nacht des Schreckens profile in nacht's loadout with `tdl setup setup-waw.toml`,
+    then says, in a big way, that it can be played."""
+    setup = os.path.join(HERE, "setup-waw.toml")
+    tdl = find_tdl()
+    if not os.path.isfile(setup) or tdl is None:
+        note(f"no Nacht des Schreckens profile: setup-waw.toml there {os.path.isfile(setup)}, tdl {tdl}")
+        return
+    try:
+        run([tdl, "setup", setup])
+    except subprocess.CalledProcessError as error:
+        print(f"note: tdl setup setup-waw.toml failed ({error.returncode})", file=sys.stderr)
+        return
+    color = sys.stdout.isatty() and "NO_COLOR" not in os.environ
+    loud = "\033[1;31m" if color else ""
+    plain = "\033[0m" if color else ""
+    loadout = os.path.join(HERE, "published", "artifacts", "loadout")
+    print()
+    print(f"{loud}--- Nacht des Schreckens is ready to play ---{plain}")
+    print("Der Riese's weapons, rebuilt from your own World at War, in nacht's loadout:")
+    print(f"  {tdl} --loadout {loadout} launch \"Nacht des Schreckens\"")
+    print()
+    note("set up the Nacht des Schreckens profile")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--source", action="store_true",
@@ -255,6 +292,8 @@ def main():
                         help="never build doomify-waw (or install what building needs): use the one "
                              "in doomify/ or on the PATH")
     parser.add_argument("--pack", action="store_true", help="also zip nacht-waw/ into nacht-waw.pk3")
+    parser.add_argument("--no-setup", action="store_true",
+                        help="don't set up the Nacht des Schreckens profile (setup-waw.toml)")
     parser.add_argument("rest", nargs="*", help="options for doomify-waw build, after --")
     args = parser.parse_args()
     note(f"=== doomify.py {' '.join(sys.argv[1:])} ===")
@@ -279,6 +318,8 @@ def main():
     run([executable, "build", FOLDER, *args.rest])
     if args.pack:
         pack()
+    if not args.no_setup:
+        set_up_schreckens()
     print("\nDone. Load nacht-waw after Horde Hammer and nacht, for example:")
     print("  uzdoom -iwad freedoom2.wad -file horde-hammer.pk3 nacht nacht-waw")
 

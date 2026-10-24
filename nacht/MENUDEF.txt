@@ -9,6 +9,11 @@ AddOptionMenu "OptionsMenu" {
     Option "$NACHT_MENU_ZOMBIES", "nacht_rogues_gallery", "Nacht_Zombies"
 }
 
+// and the simple options menu, which UZDoom shows instead while m_simpleoptions is on
+AddOptionMenu "OptionsMenuSimple" {
+    Option "$NACHT_MENU_ZOMBIES", "nacht_rogues_gallery", "Nacht_Zombies"
+}
+
 // Nacht's theme: the menus in its blood red and bone (TEXTCOLO.txt), a drop of blood for the
 // selector, its name for the main menu's title (tools/theme.py draws the pictures). The menus below
 // are UZDoom's own Doom ones, defined again after the defaults so that they take them.

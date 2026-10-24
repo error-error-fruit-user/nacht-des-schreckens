@@ -23,6 +23,8 @@ They aren't in this repository, because World at War's assets can't be shared. `
 1. Start World at War and, in Zombies, play Der Riese solo. Stay in the map.
 2. Run `python3 doomify.py` here (`python3 doomify.py --pack` also makes `nacht-waw.pk3`).
 
+Before then, nacht plays as **Nacht des Platzhalters**: Doom's marine and Doom's weapons stand in for World at War's (the box gives them; the perk machines sell Horde Hammer's drinks). `python3 publish.py` sets it up as a profile in a loadout of nacht's own, `published/artifacts/loadout` (with `tdl setup setup.toml`; tdl doesn't start opening it), and says how to play it: `tdl --loadout published/artifacts/loadout launch "Nacht des Platzhalters"`. Once `doomify.py` has built the weapons it adds **Nacht des Schreckens** beside it (`setup-waw.toml`), with nacht-waw bringing World at War's marine (`Nacht_Player`, the M1911 and two Stielhandgranaten) and weapons. `--no-setup` leaves either out.
+
 It runs the `doomify-waw` that `nacht-install` put in `doomify/` (or one from [its releases](https://github.com/error-error-fruit-user/doomify-waw/releases) put there or on your PATH), or, when this folder sits next to checkouts of `doomify-waw` and `hell-hound`, builds those first; without one, or with `--source`, it builds it from its repository, which needs git and [Rust](https://rustup.rs) 1.88 or newer, and offers to install them when they can all be installed at once. `doomify/` also holds the weapons' settings: a TOML per weapon (`doomify/weapons/`), the zombies' sounds (`doomify/sounds/`) and `doomify/doomify.toml`. Then load the three, in this order:
 
 ```

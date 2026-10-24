@@ -32,3 +32,10 @@ m7_launcher = 1067
 bowie_knife = 1068
 stielhandgranate = 1069
 bouncing_betty = 1070
+
+# The player class nacht-waw brings (Nacht_Player, made its player class): Doom's marine whose slots
+# hold only World at War's weapons, starting with the M1911 and two Stielhandgranaten. Without
+# nacht-waw the marine is Doom's own (Nacht des Platzhalters).
+[player]
+name = "Marine (Nacht)"
+start = [{ weapon = "colt", ammo = 32 }, { weapon = "stielhandgranate", ammo = 2 }]

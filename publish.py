@@ -30,6 +30,7 @@ It also warns about things UZDoom gets wrong silently:
 
 import argparse
 import os
+import platform
 import re
 import shutil
 import subprocess
@@ -146,6 +147,42 @@ def pack(files, target):
     os.replace(partial, target)
 
 
+def find_tdl():
+    """tdl, the workspace's first (../tdl/published/releases/), else the one on the PATH."""
+    releases = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "tdl", "published", "releases")
+    names = ["tdl.exe"] if platform.system() == "Windows" else ["tdl", "tdl.AppImage"]
+    for name in names:
+        path = os.path.join(releases, name)
+        if os.path.isfile(path):
+            return os.path.normpath(path)
+    return shutil.which("tdl")
+
+
+def set_up_platzhalters():
+    """Sets up nacht's loadout and its Nacht des Platzhalters profile with `tdl setup setup.toml`,
+    then says, in a big way, that it can be played."""
+    tdl = find_tdl()
+    if tdl is None:
+        print("note: no tdl to set up Nacht des Platzhalters with (../tdl/published/releases/ or the "
+              "PATH); with tdl, run: tdl setup setup.toml", file=sys.stderr)
+        return
+    result = subprocess.run([tdl, "setup", "setup.toml"])
+    if result.returncode != 0:
+        print(f"note: tdl setup setup.toml failed ({result.returncode})", file=sys.stderr)
+        return
+    color = sys.stdout.isatty() and "NO_COLOR" not in os.environ
+    loud = "\033[1;32m" if color else ""
+    plain = "\033[0m" if color else ""
+    print()
+    print(f"{loud}--- Nacht des Platzhalters is ready to play ---{plain}")
+    print("Doom's weapons stand in for World at War's, in a loadout of nacht's own:")
+    print(f"  {tdl} --loadout published/artifacts/loadout launch \"Nacht des Platzhalters\"")
+    print(f"or open it in tdl: {tdl} --loadout published/artifacts/loadout")
+    print("For Nacht des Schreckens, start World at War on Der Riese and run doomify.py: it adds that")
+    print("profile beside this one.")
+    print()
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out", help=f"where to write the pk3 (default: {OUT}/{NAME}, and the "
@@ -153,6 +190,8 @@ def main():
     parser.add_argument("--strict", action="store_true", help="fail on warnings")
     parser.add_argument("--no-library", action="store_true", help="don't pack Horde Hammer too")
     parser.add_argument("--no-appimages", action="store_true", help="don't build the AppImages")
+    parser.add_argument("--no-setup", action="store_true",
+                        help="don't set up the Nacht des Platzhalters profile (setup.toml)")
     options = parser.parse_args()
 
     here = os.path.dirname(os.path.abspath(__file__))
@@ -205,6 +244,8 @@ def main():
         if not options.no_appimages:
             appimage.build_all(OUT)
             appimage.build_exes(OUT)
+        if not options.no_setup:
+            set_up_platzhalters()
 
 
 if __name__ == "__main__":
