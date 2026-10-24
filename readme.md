@@ -55,7 +55,7 @@ To play against Doom's own monsters instead of the zombies, set 'Zombies' to 'Ro
 |Kick (a stab, once you own the Bowie knife)|F Key|Right Stick Click|
 |Equipment (monkey, Betty, Bowie knife, grenades)|G Key||
 |Swap Weapon|Mouse Wheel|Y Button|
-|Quick Swap|1-9 Keys|D-Pad (Clockwise starting from left)|
+|Quick Swap|1-9 Keys|D-Pad: Up first weapon, Right second, Left third|
 |Drop Weapon|C Key x2|Right Bumper x2|
 |Repulse/Skip Intro|Q Key|Left Bumper|
 
