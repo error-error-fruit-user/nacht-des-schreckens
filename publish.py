@@ -183,6 +183,21 @@ def set_up_platzhalters():
     print()
 
 
+def clear(folder):
+    """Empties `folder` for the new release. One that can't be emptied, left by a run with sudo,
+    is said, with how to take it back, rather than failed on."""
+    try:
+        shutil.rmtree(folder)
+    except FileNotFoundError:
+        pass
+    except PermissionError as error:
+        import getpass
+        sys.exit(f"{folder} can't be replaced ({error.strerror}: {error.filename}). It was left by "
+                 "another user, root most likely, by a run with sudo. Take it back with:\n"
+                 f"  sudo chown -R {getpass.getuser()} {os.path.abspath(os.path.dirname(folder))}")
+    os.makedirs(folder)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out", help=f"where to write the pk3 (default: {OUT}/{NAME}, and the "
@@ -212,8 +227,7 @@ def main():
         target = options.out
         os.makedirs(os.path.dirname(os.path.abspath(target)), exist_ok=True)
     else:
-        shutil.rmtree(OUT, ignore_errors=True)
-        os.makedirs(OUT)
+        clear(OUT)
         target = os.path.join(OUT, NAME)
         for license in LICENSES:
             shutil.copy(license, OUT)
