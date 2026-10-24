@@ -12,8 +12,9 @@
 //! rebuild it.
 //!
 //! The tools aren't in it. `tdl`, `tdl-install` and `doomify-waw` are taken from beside this
-//! program if they are there, and otherwise downloaded from the latest release of their
-//! repositories on GitHub (`tdl.AppImage`/`tdl.exe`, ...). Those downloads can't be checked
+//! program if they are there, else from the workspace's own releases when this program runs from
+//! a release folder in one (`../../../tdl/published/releases/`...), and otherwise downloaded from
+//! the latest release of their repositories on GitHub (`tdl.AppImage`/`tdl.exe`, ...). Those downloads can't be checked
 //! against a pinned hash, since the latest release isn't known when this is built; they come over
 //! HTTPS from the project's own releases.
 //!
@@ -260,11 +261,16 @@ fn asset(name: &str) -> String {
 }
 
 /// Gets the program `name` into `to`: copied from beside this program (as `name`, `name.exe` or
-/// `name.AppImage`), or else downloaded from the latest release of `repository`.
+/// `name.AppImage`), or from the workspace's own release of `repository` (see [`from_workspace`]),
+/// or else downloaded from its latest release on GitHub.
 fn get_tool(here: &Path, name: &str, repository: &str, to: &Path, scratch: &Scratch) -> Outcome<()> {
     let candidates = [name.to_string(), format!("{name}.exe"), asset(name)];
+    let project = repository.rsplit('/').next().unwrap_or(repository);
     if let Some(beside) = candidates.iter().map(|n| here.join(n)).find(|path| path.is_file()) {
         copy_whole(&beside, to)?;
+    } else if let Some(built) = from_workspace(here, project, name) {
+        println!("{name}: {}", built.display());
+        copy_whole(&built, to)?;
     } else {
         let url = format!("{RELEASES}/{repository}/releases/latest/download/{}", asset(name));
         println!("{name} isn't next to this program, so it is downloaded: {url}");
@@ -272,6 +278,21 @@ fn get_tool(here: &Path, name: &str, repository: &str, to: &Path, scratch: &Scra
         copy_whole(&file, to)?;
     }
     make_executable(to)
+}
+
+/// The workspace's own release of the program `name`, when this program runs from a project's
+/// release folder in a workspace that has `project` too: from
+/// `<workspace>/<this project>/published/releases/`, that is
+/// `<workspace>/<project>/published/releases/<name>.AppImage` (`.exe` on Windows), so what the
+/// workspace built is used before anything is downloaded.
+fn from_workspace(here: &Path, project: &str, name: &str) -> Option<PathBuf> {
+    let published = here.parent()?;
+    if here.file_name()? != "releases" || published.file_name()? != "published" {
+        return None;
+    }
+    let workspace = published.parent()?.parent()?;
+    let path = workspace.join(project).join("published").join("releases").join(asset(name));
+    path.is_file().then_some(path)
 }
 
 /// Runs the `tdl-install` that puts tdl, UZDoom and Freedoom 2 in `dir`. It and tdl are staged
@@ -834,6 +855,21 @@ mod tests {
         }
         let colt = embedded::DOOMIFY_WEAPONS_COLT_TOML.table().unwrap();
         assert!(!colt.is_empty());
+    }
+
+    #[test]
+    fn tools_come_from_the_workspaces_releases() {
+        let workspace = altar("workspace");
+        let here = workspace.join("nacht-des-schreckens/published/releases");
+        let releases = workspace.join("tdl/published/releases");
+        fs::create_dir_all(&here).unwrap();
+        fs::create_dir_all(&releases).unwrap();
+        assert_eq!(from_workspace(&here, "tdl", "tdl"), None);
+        fs::write(releases.join(asset("tdl")), b"").unwrap();
+        assert_eq!(from_workspace(&here, "tdl", "tdl"), Some(releases.join(asset("tdl"))));
+        // 🏠 a folder that isn't a project's release folder has no workspace around it
+        assert_eq!(from_workspace(&workspace.join("tdl"), "tdl", "tdl"), None);
+        let _ = fs::remove_dir_all(&workspace);
     }
 
     #[test]

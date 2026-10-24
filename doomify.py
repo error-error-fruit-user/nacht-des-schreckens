@@ -8,10 +8,12 @@ Run it before playing for the first time, and again after nacht's weapons change
   1. Start World at War and, in Zombies (solo), load Der Riese. Stay in the map.
   2. python3 doomify.py
 
-It needs Blender (blender.org), which renders the weapons. It runs doomify-waw: the one nacht-install
-put in doomify/, or doomify-waw on your PATH, or (with --source, or when there is neither)
-doomify-waw built from its repository with git and Rust's cargo, which it offers to install when
-they are missing and can all be installed at once. Released executables are on doomify-waw's
+It needs Blender (blender.org), which renders the weapons. It runs doomify-waw: built from the
+workspace's own doomify-waw checkout when this one sits beside it (../doomify-waw, with
+../hell-hound), so it is never older than the workspace; else the one nacht-install put in
+doomify/, or doomify-waw on your PATH, or (with --source, or when there is neither) doomify-waw
+built from its repository with git and Rust's cargo, which it offers to install when they are
+missing and can all be installed at once. Released executables are on doomify-waw's
 GitHub releases. Anything after the options goes to doomify-waw build (--help lists them: --force
 renders everything again, --blender PATH picks Blender).
 
@@ -28,6 +30,8 @@ import sys
 import zipfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+# The folder holding this project and its neighbours, whose checkouts come before any download
+WORKSPACE = os.path.dirname(HERE)
 FOLDER = os.path.join(HERE, "doomify")
 OUTPUT = os.path.join(HERE, "nacht-waw")
 REPOSITORIES = {
@@ -91,9 +95,10 @@ def install_plan(missing_git, missing_rust):
     return commands
 
 
-def get_tools():
-    """git and a new enough cargo, installed after asking when they can all be at once."""
-    missing_git = shutil.which("git") is None
+def get_tools(git=True):
+    """git (unless not needed) and a new enough cargo, installed after asking when they can all be
+    at once."""
+    missing_git = git and shutil.which("git") is None
     missing_rust = not rust_ok()
     if not missing_git and not missing_rust:
         return
@@ -116,6 +121,20 @@ def get_tools():
         sys.exit(f"{wanted} still can't be found: open a new terminal and run this again.")
 
 
+def workspace_project():
+    """The workspace's doomify-waw checkout, when it and hell-hound (which it is built against, from
+    beside it) are both there; None otherwise."""
+    project = os.path.join(WORKSPACE, "doomify-waw")
+    found = all(os.path.isfile(os.path.join(WORKSPACE, name, "Cargo.toml")) for name in REPOSITORIES)
+    return project if found else None
+
+
+def build(project):
+    """doomify-waw built in the checkout `project`."""
+    run(["cargo", "build", "--release", "--manifest-path", os.path.join(project, "Cargo.toml")])
+    return os.path.join(project, "target", "release", executable_name())
+
+
 def from_source():
     """doomify-waw built from its repository, cloned (or updated) into doomify/src with hell-hound,
     which it is built against, next to it."""
@@ -128,9 +147,7 @@ def from_source():
             run(["git", "-C", path, "pull", "--ff-only"])
         else:
             run(["git", "clone", "--depth", "1", url, path])
-    project = os.path.join(sources, "doomify-waw")
-    run(["cargo", "build", "--release", "--manifest-path", os.path.join(project, "Cargo.toml")])
-    return os.path.join(project, "target", "release", executable_name())
+    return build(os.path.join(sources, "doomify-waw"))
 
 
 def pack():
@@ -148,12 +165,19 @@ def pack():
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--source", action="store_true",
-                        help="build doomify-waw from its repository instead of using an installed one")
+                        help="build doomify-waw from its repository instead of using an installed "
+                             "one (the workspace's checkout is always built first when there is one)")
     parser.add_argument("--pack", action="store_true", help="also zip nacht-waw/ into nacht-waw.pk3")
     parser.add_argument("rest", nargs="*", help="options for doomify-waw build, after --")
     args = parser.parse_args()
 
-    executable = None if args.source else installed()
+    workspace = workspace_project()
+    if workspace is not None:
+        print(f"Building doomify-waw from the workspace: {workspace}")
+        get_tools(git=False)
+        executable = build(workspace)
+    else:
+        executable = None if args.source else installed()
     if executable is None:
         if not args.source:
             print("No doomify-waw in doomify/ or on the PATH: building it from source.")
