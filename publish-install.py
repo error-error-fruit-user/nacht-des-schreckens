@@ -178,7 +178,9 @@ def plan(args):
                      + (f" (at {args.waw})" if args.waw else " (found in your Steam libraries)")
                      + " into songs/ in the artifacts and makes it tdl's song, for every loadout. It is "
                      "heavy metal: tdl's splash will open on down-tuned riffs and screaming, so mind "
-                     "your speakers (--no-song keeps the music you have)")
+                     "your speakers (--no-song keeps the music you have). Lullaby for a Dead Man "
+                     "(Verrückt's) and The One (Shi No Numa's) are pulled too, for tdl to know: they "
+                     "play only if you pick one (J/K on the song in tdl's settings)")
     if not args.no_doomify and args.rerender:
         lines.append("    - pulls and renders every weapon again from World at War (--rerender), though "
                      "they are built and in the cache: an hour or more")

@@ -30,9 +30,10 @@
 //! builds the weapons, which needs World at War running with Der Riese loaded unless everything is
 //! in doomify's cache (about an hour the first time), and packs them into `wads/nacht-waw.pk3`.
 //! Blender's script pulls from the game by running this program again with
-//! `--script TOML --out DIR`. Last, it pulls nacht's song, Der Riese's Beauty of Annihilation, out
-//! of the player's World at War (found in a Steam library, or `--waw`) into `songs/` (`--no-song`
-//! leaves it), and sets up the install's loadout with `tdl setup`, the song as tdl's.
+//! `--script TOML --out DIR`. Last, it pulls World at War's songs out of the player's game (found
+//! in a Steam library, or `--waw`) into `songs/` (`--no-song` leaves them): Lullaby for a Dead
+//! Man, The One and nacht's own, Der Riese's Beauty of Annihilation; and sets up the install's
+//! loadout with `tdl setup`, tdl knowing them all and nacht's as its song.
 
 /// The journal and the voice: installation-groans' groans.rs, built in (see `build.rs`).
 #[macro_use]
@@ -71,8 +72,8 @@ const NAME: &str = "nacht-des-schreckens";
 /// Where in the artifacts doomify's settings go (the repository's `doomify/`).
 const DOOMIFY: &str = "doomify";
 
-/// A song of World at War's a map brings: pulled from the player's own game into the install's
-/// `songs/` (it never comes with the map) and kept as tdl's song. Each map has its own.
+/// A song of World at War's: pulled from the player's own game into the install's `songs/` (it
+/// never comes with the map), for tdl to know; the map's own (`SONG`) is kept as tdl's song.
 struct Song {
     title: &'static str,
     /// What it is called in `songs/`.
@@ -92,6 +93,27 @@ const SONG: Song = Song {
               the splash opens on down-tuned riffs and screaming. Turn your speakers down, or pass \
               --no-song to keep the music you have.",
 };
+
+/// World at War's songs, each a map's easter egg: every one is pulled for tdl to know (`J`/`K` on
+/// the song in its settings), nacht's (`SONG`) among them. A song a player's game lacks (the
+/// map packs bring The One and Beauty of Annihilation) is left out.
+const SONGS: [Song; 3] = [
+    Song {
+        title: "Lullaby for a Dead Man",
+        file: "lullaby_for_a_dead_man.wav",
+        inside: "sound/stream/music/mission/zombie/mx_lullaby.wav",
+        warning: "Lullaby for a Dead Man, Verrückt's song, is pulled too, for tdl to know: it plays \
+                  only if you pick it (J/K on the song in tdl's settings).",
+    },
+    Song {
+        title: "The One",
+        file: "the_one.wav",
+        inside: "sound/stream/music/mission/zombie/mx_the_one.wav",
+        warning: "The One, Shi No Numa's song, is pulled too, for tdl to know: it plays only if you \
+                  pick it.",
+    },
+    SONG,
+];
 
 /// World at War's folder in a Steam library.
 const WORLD_AT_WAR: &str = "steamapps/common/Call of Duty World at War";
@@ -171,7 +193,8 @@ struct Cli {
     /// Doesn't open tdl on the install's loadout at the end
     #[arg(long)]
     no_play: bool,
-    /// Doesn't pull nacht's song (Beauty of Annihilation) from World at War for tdl to play
+    /// Doesn't pull World at War's songs for tdl: nacht's (Beauty of Annihilation), which becomes
+    /// tdl's song, Lullaby for a Dead Man and The One
     #[arg(long)]
     no_song: bool,
     /// Where everything but the pk3s goes (tdl, UZDoom, Freedoom 2, Blender, doomify's settings and
@@ -350,6 +373,11 @@ fn plan(cli: &Cli, dir: &Path, art: &Path) -> Vec<String> {
     if !cli.no_song && !steps.done("song") {
         lines.push(format!("  - {}", SONG.warning));
     }
+    if !cli.no_song && !steps.done("songs") {
+        for song in SONGS.iter().filter(|song| song.title != SONG.title) {
+            lines.push(format!("  - {}", song.warning));
+        }
+    }
     if !cli.no_doomify && cli.rerender {
         lines.push(
             "  - pull and render every weapon again from World at War (--rerender), though they are built and in the cache: an hour or more"
@@ -503,18 +531,39 @@ fn run(mut cli: Cli) -> Outcome<()> {
     {
         steps.finish(&weapons);
     }
-    // 🎵 the song is pulled and made tdl's once: a song picked since then is left alone
-    let song = if cli.no_song {
-        None
-    } else if steps.done("song") {
-        journal::section("song");
-        steps.skip(SONG.title, "tdl's song, picked once");
-        None
+    // 🎵 World at War's songs are pulled once for tdl to know, and nacht's is made tdl's song once:
+    // a song picked since then is left alone
+    let (song, songs) = if cli.no_song {
+        (None, Vec::new())
     } else {
         journal::section("song");
-        pull_song(&SONG, &art, cli.waw.as_deref())
+        let make_song = !steps.done("song");
+        let know = !steps.done("songs");
+        if !make_song {
+            steps.skip(SONG.title, "tdl's song, picked once");
+        }
+        if !know {
+            note!("World at War's songs are to be pulled for tdl to know");
+        } else {
+            steps.skip("World at War's songs", "the songs tdl knows");
+        }
+        let wanted: Vec<&Song> = SONGS
+            .iter()
+            .filter(|song| know || (make_song && song.title == SONG.title))
+            .collect();
+        let pulled = pull_songs(&wanted, &art, cli.waw.as_deref());
+        let song = pulled
+            .iter()
+            .find(|(song, _)| make_song && song.title == SONG.title)
+            .map(|(_, path)| path.clone());
+        let songs = if know {
+            pulled.into_iter().map(|(_, path)| path).collect()
+        } else {
+            Vec::new()
+        };
+        (song, songs)
     };
-    let tdl = set_up_loadout(&dir, &art, song.as_deref(), &mut steps);
+    let tdl = set_up_loadout(&dir, &art, song.as_deref(), &songs, &mut steps);
     if let Some(tdl) = &tdl {
         let mut command = vec![tdl.display().to_string(), "--session".into()];
         command.extend([
@@ -546,6 +595,7 @@ fn set_up_loadout(
     dir: &Path,
     art: &Path,
     song: Option<&Path>,
+    songs: &[PathBuf],
     steps: &mut journal::Steps,
 ) -> Option<PathBuf> {
     let name = if cfg!(windows) { "tdl.exe" } else { "tdl" };
@@ -589,6 +639,11 @@ fn set_up_loadout(
     if let Some(song) = song {
         text.push_str(&format!("song = {}\n", quoted(song)));
         setting_up.push("song".to_string());
+    }
+    if !songs.is_empty() {
+        let known: Vec<String> = songs.iter().map(|song| quoted(song)).collect();
+        text.push_str(&format!("songs = [{}]\n", known.join(", ")));
+        setting_up.push("songs".to_string());
     }
     if !steps.done(&platzhalters_step) {
         text.push_str(&format!(
@@ -790,17 +845,21 @@ fn fnv(bytes: &[u8]) -> String {
     format!("{hash:016x}")
 }
 
-/// Pulls `song` out of the player's World at War (`waw`, or the one in a Steam library) into
-/// `<dir>/songs/` (its warning was in the plan). Returns where it is, or `None` (said) when there is no game
-/// or no song in it.
-fn pull_song(song: &Song, dir: &Path, waw: Option<&Path>) -> Option<PathBuf> {
-    note!("{}", song.warning);
+/// Pulls `songs` out of the player's World at War (`waw`, or the one in a Steam library) into
+/// `<dir>/songs/` (their warnings were in the plan). Returns those it pulled and where each is;
+/// a missing game, or a song the game lacks, is said.
+fn pull_songs<'a>(songs: &[&'a Song], dir: &Path, waw: Option<&Path>) -> Vec<(&'a Song, PathBuf)> {
+    if songs.is_empty() {
+        return Vec::new();
+    }
+    for song in songs {
+        note!("{}", song.warning);
+    }
     let Some(main) = world_at_war(waw) else {
         say!(
-            "World at War wasn't found, so {} isn't tdl's song (--waw DIR says where it is)",
-            song.title
+            "World at War wasn't found, so its songs aren't pulled for tdl (--waw DIR says where it is)"
         );
-        return None;
+        return Vec::new();
     };
     journal::tell(
         "found",
@@ -810,29 +869,27 @@ fn pull_song(song: &Song, dir: &Path, waw: Option<&Path>) -> Option<PathBuf> {
         ],
         &format!("World at War: {}", main.display()),
     );
-    let to = dir.join("songs").join(song.file);
-    match pull(song, &main, &to) {
-        Ok(true) => {
-            journal::tell(
-                "copy",
-                &[("what", song.title), ("place", &to.display().to_string())],
-                &format!("{}: {}", song.title, to.display()),
-            );
-            Some(to)
-        }
-        Ok(false) => {
-            say!(
-                "{} isn't in World at War's IWDs in {}",
+    let mut pulled = Vec::new();
+    for song in songs {
+        let to = dir.join("songs").join(song.file);
+        match pull(song, &main, &to) {
+            Ok(true) => {
+                journal::tell(
+                    "copy",
+                    &[("what", song.title), ("place", &to.display().to_string())],
+                    &format!("{}: {}", song.title, to.display()),
+                );
+                pulled.push((*song, to));
+            }
+            Ok(false) => say!(
+                "{} isn't in World at War's IWDs in {} (its map pack isn't installed?)",
                 song.title,
                 main.display()
-            );
-            None
-        }
-        Err(problem) => {
-            warn!("Couldn't pull {}: {problem}", song.title);
-            None
+            ),
+            Err(problem) => warn!("Couldn't pull {}: {problem}", song.title),
         }
     }
+    pulled
 }
 
 /// Copies `song` from the last of `main`'s IWDs that has it to `to`. `false` if none has it.
@@ -1666,6 +1723,47 @@ mod tests {
             assert_eq!(download.sha256.len(), 64, "{}", download.name);
             assert!(download.urls.iter().all(|url| url.ends_with(download.name)));
         }
+    }
+
+    #[test]
+    fn world_at_wars_songs_are_pulled_the_last_iwd_winning() {
+        let dir = altar("songs");
+        let main = dir.join("game/main");
+        fs::create_dir_all(&main).unwrap();
+        let iwd = |name: &str, files: &[(&str, &[u8])]| {
+            let mut writer = zip::ZipWriter::new(fs::File::create(main.join(name)).unwrap());
+            for (inside, contents) in files {
+                writer
+                    .start_file(*inside, zip::write::SimpleFileOptions::default())
+                    .unwrap();
+                writer.write_all(contents).unwrap();
+            }
+            writer.finish().unwrap();
+        };
+        // the game's own capitals, and an older Lullaby that a later IWD overrides
+        iwd("iw_00.iwd", &[]);
+        iwd(
+            "iw_23.iwd",
+            &[("sound/Stream/music/Mission/zombie/mx_lullaby.wav", b"old")],
+        );
+        iwd(
+            "iw_27.iwd",
+            &[
+                ("sound/Stream/music/Mission/zombie/mx_lullaby.wav", b"new"),
+                ("sound/Stream/music/Mission/zombie/mx_beauty.wav", b"metal"),
+            ],
+        );
+        let wanted: Vec<&Song> = SONGS.iter().collect();
+        let pulled = pull_songs(&wanted, &dir.join("art"), Some(&dir.join("game")));
+        let titles: Vec<_> = pulled.iter().map(|(song, _)| song.title).collect();
+        // The One's map pack isn't there: it is left out
+        assert_eq!(titles, ["Lullaby for a Dead Man", "Beauty of Annihilation"]);
+        assert_eq!(fs::read(&pulled[0].1).unwrap(), b"new");
+        assert_eq!(
+            pulled[1].1,
+            dir.join("art/songs/beauty_of_annihilation.wav")
+        );
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
