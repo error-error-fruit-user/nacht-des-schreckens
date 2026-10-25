@@ -8,7 +8,8 @@
 //! ```
 //!
 //! The `doomify/**/*.toml` settings are built into it as consts of doomify's types (`const_toml!`,
-//! made by `build.rs` from the repository), and it puts them in its artifacts' `doomify/`, which
+//! made by `build.rs` from the repository): their data, not their text. It writes them from that
+//! data into its artifacts' `doomify/`, which
 //! the weapons are built from: a player can rewrite them there, and they are kept until a newer
 //! install-nacht brings settings of its own, which replace them.
 //!
@@ -672,30 +673,49 @@ fn files_under(folder: &Path, found: &mut Vec<PathBuf>) {
     }
 }
 
-/// Puts doomify's settings, built in from the repository's `doomify/`, in `settings`, which the
-/// weapons are built from. A player may rewrite them there, and they are kept (said so) until this
-/// is an install-nacht whose settings differ from the ones put there last, a newer release's,
-/// which replace them (`--reinstall` too).
+/// What starts every TOML the install writes.
+const WRITTEN: &str = "# Written by install-nacht from the settings built into it: rewrite it to build your own\n\
+                       # weapons (kept until a newer install-nacht brings other settings, which replace it).\n";
+
+/// doomify's settings built in, as the install writes them (from their data, which is all that is
+/// built in): where each goes in the settings folder, and its text.
+fn built_settings() -> Vec<(String, String)> {
+    let written =
+        |data: Result<String, toml::ser::Error>| format!("{WRITTEN}{}", data.unwrap_or_default());
+    let mut settings = vec![(
+        "doomify.toml".to_string(),
+        written(toml::to_string(&embedded::CONFIG)),
+    )];
+    for (id, weapon) in embedded::WEAPONS {
+        settings.push((
+            format!("weapons/{id}.toml"),
+            written(toml::to_string(weapon)),
+        ));
+    }
+    for (id, set) in embedded::SOUNDS {
+        settings.push((format!("sounds/{id}.toml"), written(toml::to_string(set))));
+    }
+    settings
+}
+
+/// Puts doomify's settings, built into this from the repository's `doomify/`, in `settings`,
+/// which the weapons are built from. A player may rewrite them there, and they are kept (said
+/// so) until this is an install-nacht whose settings differ from the ones put there last, a newer
+/// release's, which replace them (`--reinstall` too).
 fn place_settings(settings: &Path, steps: &mut journal::Steps) -> Outcome<()> {
-    let texts: Vec<u8> = embedded::FILES
+    let built = built_settings();
+    let texts: Vec<u8> = built
         .iter()
-        .flat_map(|(inside, text)| [inside.as_bytes(), text.as_bytes()])
+        .flat_map(|(place, text)| [place.as_bytes(), text.as_bytes()])
         .flatten()
         .copied()
         .collect();
     let step = format!("settings {}", fnv(&texts));
-    let rewritten: Vec<&str> = embedded::FILES
+    let rewritten: Vec<&str> = built
         .iter()
-        .map(|(inside, _)| *inside)
-        .filter(|inside| !same_as_built(settings, inside))
+        .map(|(place, _)| place.as_str())
+        .filter(|place| !same_as_built(settings, place))
         .collect();
-    let named = |files: &[&str]| {
-        files
-            .iter()
-            .map(|inside| inside.strip_prefix("doomify/").unwrap_or(inside))
-            .collect::<Vec<_>>()
-            .join(", ")
-    };
     if steps.done(&step) {
         if rewritten.is_empty() {
             steps.skip("doomify's settings", &settings.display().to_string());
@@ -703,19 +723,20 @@ fn place_settings(settings: &Path, steps: &mut journal::Steps) -> Outcome<()> {
             say!(
                 "Your settings in {} are kept, and the weapons are built from them: {}",
                 settings.display(),
-                named(&rewritten)
+                rewritten.join(", ")
             );
         }
         return Ok(());
     }
-    for (inside, text) in embedded::FILES {
-        write_text(&setting(settings, inside), text)?;
+    let replaced = !rewritten.is_empty() && settings.join("doomify.toml").is_file();
+    for (place, text) in &built {
+        write_text(&settings.join(place), text)?;
     }
-    if !rewritten.is_empty() && settings.join("doomify.toml").is_file() {
+    if replaced {
         say!(
             "This install-nacht's settings replace the ones in {} that differ: {}",
             settings.display(),
-            named(&rewritten)
+            rewritten.join(", ")
         );
     }
     journal::tell(
@@ -730,22 +751,17 @@ fn place_settings(settings: &Path, steps: &mut journal::Steps) -> Outcome<()> {
     Ok(())
 }
 
-/// Where the built-in `inside` (`doomify/weapons/colt.toml`) goes in `settings`.
-fn setting(settings: &Path, inside: &str) -> PathBuf {
-    settings.join(inside.strip_prefix("doomify/").unwrap_or(inside))
-}
-
-/// Whether the installed copy of the built-in `inside` reads as the same settings, as doomify reads
-/// it (comments and layout aside).
-fn same_as_built(settings: &Path, inside: &str) -> bool {
-    let Ok(text) = fs::read_to_string(setting(settings, inside)) else {
+/// Whether the installed `place` (`weapons/colt.toml`) in `settings` reads as the built-in
+/// settings, as doomify reads it (comments and layout aside).
+fn same_as_built(settings: &Path, place: &str) -> bool {
+    let Ok(text) = fs::read_to_string(settings.join(place)) else {
         return false;
     };
-    let id = Path::new(inside)
+    let id = Path::new(place)
         .file_stem()
         .and_then(|stem| stem.to_str())
         .unwrap_or_default();
-    if inside.starts_with("doomify/weapons/") {
+    if place.starts_with("weapons/") {
         embedded::WEAPONS.iter().any(|(built_id, built)| {
             *built_id == id
                 && toml::from_str::<doomify::types::Weapon>(&text)
@@ -753,7 +769,7 @@ fn same_as_built(settings: &Path, inside: &str) -> bool {
                     .as_ref()
                     == Some(built)
         })
-    } else if inside.starts_with("doomify/sounds/") {
+    } else if place.starts_with("sounds/") {
         embedded::SOUNDS.iter().any(|(built_id, built)| {
             *built_id == id
                 && toml::from_str::<doomify::types::SoundSet>(&text)
@@ -1369,6 +1385,11 @@ fn build_weapons(
         }
     };
     project.config.pack = Some(packed.display().to_string().into());
+    // 🗝️ the caches keyed on the built-in files' text, before doomify keyed them on the data
+    for (name, keys) in embedded::LEGACY_KEYS {
+        let known = project.legacy_keys.entry(name.to_string()).or_default();
+        known.extend(keys.iter().map(|key| key.to_string()));
+    }
     let running = world_at_war_running();
     if running {
         journal::tell(
@@ -1698,21 +1719,23 @@ mod tests {
                 .any(|(id, weapon)| *id == "colt" && *weapon == COLT)
         );
         assert!(!embedded::SOUNDS.is_empty());
-        let names: Vec<_> = embedded::FILES.iter().map(|(name, _)| *name).collect();
-        assert!(names.contains(&"doomify/doomify.toml"));
-        assert_eq!(
-            names
+        assert!(
+            embedded::LEGACY_KEYS
                 .iter()
-                .filter(|name| name.starts_with("doomify/weapons/"))
-                .count(),
-            embedded::WEAPONS.len()
+                .any(|(name, keys)| *name == "colt" && !keys.is_empty())
         );
-        // and each file's text reads as the const built from it
+        // only the data is built in: the TOMLs written from it read as the same data
+        let built = built_settings();
+        assert_eq!(
+            built.len(),
+            1 + embedded::WEAPONS.len() + embedded::SOUNDS.len()
+        );
         for (id, weapon) in embedded::WEAPONS {
-            let (_, text) = embedded::FILES
+            let (_, text) = built
                 .iter()
-                .find(|(name, _)| *name == format!("doomify/weapons/{id}.toml"))
+                .find(|(place, _)| *place == format!("weapons/{id}.toml"))
                 .unwrap();
+            assert!(text.starts_with(WRITTEN));
             assert_eq!(
                 &toml::from_str::<doomify::types::Weapon>(text).unwrap(),
                 weapon
@@ -1728,17 +1751,17 @@ mod tests {
         let mut steps = journal::Steps::open(&art, false);
         place_settings(&settings, &mut steps).unwrap();
         assert!(
-            embedded::FILES
+            built_settings()
                 .iter()
-                .all(|(inside, _)| same_as_built(&settings, inside))
+                .all(|(place, _)| same_as_built(&settings, place))
         );
         // a player's rewrite, and a comment alone, which reads the same
         let colt = settings.join("weapons/colt.toml");
         let text = fs::read_to_string(&colt).unwrap();
         fs::write(&colt, format!("# mine\n{text}")).unwrap();
-        assert!(same_as_built(&settings, "doomify/weapons/colt.toml"));
+        assert!(same_as_built(&settings, "weapons/colt.toml"));
         fs::write(&colt, text.replace("name = \"", "name = \"My ")).unwrap();
-        assert!(!same_as_built(&settings, "doomify/weapons/colt.toml"));
+        assert!(!same_as_built(&settings, "weapons/colt.toml"));
         let mut steps = journal::Steps::open(&art, false);
         place_settings(&settings, &mut steps).unwrap();
         assert!(fs::read_to_string(&colt).unwrap().contains("My "));

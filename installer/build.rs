@@ -2,8 +2,9 @@
 //! read into (`doomify.toml` a `Config`, `weapons/*.toml` a `Weapon`, `sounds/*.toml` a
 //! `SoundSet`): each is read with serde here, a TOML that doesn't read or check failing the build,
 //! and written into `OUT_DIR/const_toml/` as the Rust that builds it, which `const_toml!` puts in a
-//! named const (`DOOMIFY_WEAPONS_COLT_TOML`). Then the tables over them: `FILES` (each file's
-//! path and text, which the install puts in its artifacts), `WEAPONS`, `SOUNDS` and `CONFIG`. So
+//! named const (`DOOMIFY_WEAPONS_COLT_TOML`). Then the tables over them: `WEAPONS`, `SOUNDS` and
+//! `CONFIG`, and `LEGACY_KEYS`, the keys doomify's caches had when they were keyed on the files'
+//! text. Only the data is built in, not the text: the install writes its TOMLs from the data. So
 //! the settings it installs are the repository's when it is built: edit them, then rebuild.
 //!
 //! It also brings installation-groans' files (`groans.rs`, the journal it is built with, and the
@@ -105,7 +106,8 @@ fn main() -> io::Result<()> {
     // type its place says, then the tables over them
     let mut code = String::new();
     let mut names = Vec::new();
-    let (mut all, mut weapons, mut sounds, mut config) = (vec![], vec![], vec![], None);
+    let (mut weapons, mut sounds, mut config) = (vec![], vec![], None);
+    let mut legacy = Vec::new();
     for path in &files {
         let inside = path
             .strip_prefix(&root)
@@ -132,11 +134,16 @@ fn main() -> io::Result<()> {
             // checked as doomify checks a weapon, so a bad one fails here
             doomify::weapon::Weapon::load(path).map_err(built)?;
             doomify::const_toml::write::<doomify::types::Weapon>(path, &inside).map_err(built)?;
+            let text = fs::read_to_string(path)?;
+            legacy.push((id.clone(), doomify::project::text_keys(&id, &text)));
             weapons.push((id, name.clone()));
             "Weapon"
         } else if inside.starts_with("doomify/sounds/") {
             doomify::sounds::SoundSet::load(path).map_err(built)?;
             doomify::const_toml::write::<doomify::types::SoundSet>(path, &inside).map_err(built)?;
+            let cache = format!("sounds-{id}");
+            let text = fs::read_to_string(path)?;
+            legacy.push((cache.clone(), doomify::project::text_keys(&cache, &text)));
             sounds.push((id, name.clone()));
             "SoundSet"
         } else if inside == "doomify/doomify.toml" {
@@ -150,15 +157,12 @@ fn main() -> io::Result<()> {
         code.push_str(&format!(
             "/// `{inside}`, as the repository had it when this was built.\npub const {name}: {kind} = const_toml![{inside:?}];\n"
         ));
-        all.push(inside);
         names.push(name);
     }
     let config = config.ok_or_else(|| io::Error::other("doomify/doomify.toml is missing"))?;
-    code.push_str("/// Every TOML the install puts in its artifacts: where (from the repository's root), and its text.\npub const FILES: &[(&str, &str)] = &[\n");
-    for inside in &all {
-        code.push_str(&format!(
-            "    ({inside:?}, include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/../\", {inside:?}))),\n"
-        ));
+    code.push_str("/// The keys doomify's caches of these had when they were keyed on the files' text (by weapon id, or `sounds-<id>`).\npub const LEGACY_KEYS: &[(&str, &[&str])] = &[\n");
+    for (cache, keys) in &legacy {
+        code.push_str(&format!("    ({cache:?}, &{keys:?}),\n"));
     }
     code.push_str("];\n");
     for (title, doc, kind, entries) in [
