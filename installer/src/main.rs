@@ -482,14 +482,17 @@ fn run(mut cli: Cli) -> Outcome<()> {
     };
     note!("blender: {:?}", blender);
     let built = dir.join("wads").join("nacht-waw.pk3");
-    if !cli.no_doomify && !cli.rerender && steps.done("weapons") && built.is_file() {
+    // 🔫 built again when doomify-waw's versions or nacht's weapon settings changed (doomify-waw's
+    // cache keeps what they didn't touch), so a newer render script's frames reach the install
+    let weapons = format!("weapons {}", weapons_mark(&home));
+    if !cli.no_doomify && !cli.rerender && steps.done(&weapons) && built.is_file() {
         journal::section("weapons");
         steps.skip("nacht-waw.pk3", &built.display().to_string());
     } else if !cli.no_doomify
         && let Some(python) = python
         && doomify(&python, &home, &dir, blender.as_deref(), cli.rerender)
     {
-        steps.finish("weapons");
+        steps.finish(&weapons);
     }
     // 🎵 the song is pulled and made tdl's once: a song picked since then is left alone
     let song = if cli.no_song {
@@ -640,6 +643,31 @@ fn fingerprint(files: &[PathBuf]) -> String {
         hash = (hash ^ 0xff).wrapping_mul(0x100_0000_01b3);
     }
     format!("{hash:016x}")
+}
+
+/// The mark of what builds nacht-waw: the versions the doomify-waw in `home` gives (its render
+/// script's parts and its assembly, `doomify-waw versions`; its bytes for one too old to give
+/// them) and the doomify.py and settings this was built with.
+fn weapons_mark(home: &Path) -> String {
+    let doomify_waw = home.join(if cfg!(windows) {
+        "doomify-waw.exe"
+    } else {
+        "doomify-waw"
+    });
+    let versions = Command::new(&doomify_waw)
+        .arg("versions")
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .map(|output| fnv(&output.stdout))
+        .unwrap_or_else(|| fingerprint(&[doomify_waw]));
+    let settings: Vec<u8> = embedded::FILES
+        .iter()
+        .flat_map(|(inside, contents)| [inside.as_bytes(), contents.as_bytes()])
+        .flatten()
+        .copied()
+        .collect();
+    format!("{versions} {}", fnv(&settings))
 }
 
 /// The same mark of `bytes` alone.
@@ -850,13 +878,8 @@ fn get_tool(
     to: &Path,
     scratch: &Scratch,
 ) -> Outcome<()> {
-    let candidates = [name.to_string(), format!("{name}.exe"), asset(name)];
     let project = repository.rsplit('/').next().unwrap_or(repository);
-    if let Some(beside) = candidates
-        .iter()
-        .map(|n| here.join(n))
-        .find(|path| path.is_file())
-    {
+    if let Some(beside) = beside(here, name) {
         note!("{name}: the one beside this program, {}", beside.display());
         copy_whole(&beside, to)?;
     } else if let Some(built) = from_workspace(here, project, name) {
@@ -883,6 +906,21 @@ fn get_tool(
     make_executable(to)?;
     note!("{name} is at {}", to.display());
     Ok(())
+}
+
+/// The program `name` beside this one.
+fn beside(here: &Path, name: &str) -> Option<PathBuf> {
+    [name.to_string(), format!("{name}.exe"), asset(name)]
+        .iter()
+        .map(|n| here.join(n))
+        .find(|path| path.is_file())
+}
+
+/// The copy of `name` that `get_tool` takes without downloading: the one beside this program or
+/// the workspace's release.
+fn local_tool(here: &Path, name: &str, repository: &str) -> Option<PathBuf> {
+    let project = repository.rsplit('/').next().unwrap_or(repository);
+    beside(here, name).or_else(|| from_workspace(here, project, name))
 }
 
 /// The workspace's own release of the program `name`, when this program runs from a project's
@@ -1029,8 +1067,14 @@ fn place_files(
     } else {
         "doomify-waw"
     });
+    // 🔁 kept only while it is the one this would copy (a newer release beside this program or in
+    // the workspace replaces it); with none to copy, it isn't downloaded again
+    let current = match local_tool(here, "doomify-waw", DOOMIFY_REPOSITORY) {
+        Some(from) => fs::read(&from).ok() == fs::read(&to).ok(),
+        None => true,
+    };
     // Not fatal: without it doomify.py builds doomify-waw from its source (git and cargo)
-    if to.is_file() && !reinstall {
+    if to.is_file() && current && !reinstall {
         journal::tell(
             "skip",
             &[
