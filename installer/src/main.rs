@@ -53,9 +53,11 @@ use sha2::{Digest, Sha256};
 
 /// The pk3s nacht is played with, in the order they load.
 const PK3S: [&str; 2] = ["horde-hammer.pk3", "nacht.pk3"];
-/// nacht's keyboard controls, the ini its profiles are given: beside this program, copied into
-/// the artifacts once (UZDoom rewrites it on every exit, so the player's settings stay).
+/// nacht's keyboard controls, the ini its profiles are given: built in from the repository's
+/// `config.ini`, and written into the install's folder once (UZDoom rewrites it on every exit, so
+/// the player's settings stay).
 const INI: &str = "config.ini";
+const CONFIG_INI: &str = include_str!("../../config.ini");
 /// Where the tools are released: the latest release of each repository has its programs as
 /// assets named like the program, `.AppImage` on Linux and `.exe` on Windows.
 const RELEASES: &str = "https://github.com";
@@ -304,12 +306,12 @@ fn plan(cli: &Cli, dir: &Path, art: &Path) -> Vec<String> {
     let mut lines = vec![
         "Saying yes will:".to_string(),
         format!(
-            "  - install Nacht des Schreckens in {}{}: horde-hammer.pk3 and nacht.pk3, the payload, in its wads/",
+            "  - install Nacht des Schreckens in {}{}: horde-hammer.pk3 and nacht.pk3, the payload, in its wads/, and {INI} (nacht's controls, the profiles' ini)",
             dir.display(),
             ""
         ),
         format!(
-            "  - put everything else, its artifacts, in {}: doomify.py with its settings, a doomify-waw, the loadout, {INI} (nacht's controls, the profiles' ini) and its log",
+            "  - put everything else, its artifacts, in {}: doomify.py with its settings, a doomify-waw, the loadout and its log",
             art.display()
         ),
     ];
@@ -420,7 +422,7 @@ fn run(mut cli: Cli) -> Outcome<()> {
     let cli = &cli;
     let mode = cli.mode;
     refuse_root()?;
-    for pk3 in PK3S.into_iter().chain([INI]) {
+    for pk3 in PK3S {
         if !here.join(pk3).is_file() {
             return Err(format!(
                 "{pk3} isn't next to this program, in {}: run it from the published folder",
@@ -464,7 +466,7 @@ fn run(mut cli: Cli) -> Outcome<()> {
     let home = art.join(NAME);
     journal::section("install");
     place_files(&here, &dir, &home, &scratch, cli.reinstall)?;
-    place_ini(&here, &art, cli.reinstall)?;
+    place_ini(&dir, cli.reinstall)?;
 
     let python = find_python();
     if python.is_none() {
@@ -500,7 +502,7 @@ fn run(mut cli: Cli) -> Outcome<()> {
         journal::section("song");
         pull_song(&SONG, &art, cli.waw.as_deref())
     };
-    let tdl = set_up_loadout(&here, &dir, &art, &home, song.as_deref(), &mut steps);
+    let tdl = set_up_loadout(&dir, &art, &home, song.as_deref(), &mut steps);
     if let Some(tdl) = &tdl {
         let mut command = vec![tdl.display().to_string(), "--session".into()];
         command.extend([
@@ -528,9 +530,8 @@ fn run(mut cli: Cli) -> Outcome<()> {
 /// makes Nacht des Platzhalters in it, and Nacht des Schreckens once `nacht-waw.pk3` is in the wad
 /// pool (`<dir>/wads`), and the tdl the install put in `art` (or the one on the PATH) runs
 /// `tdl setup` on it. Returns that tdl, or
-/// `None` (said) when there is none or the setup failed. Both profiles get `<art>/config.ini`.
+/// `None` (said) when there is none or the setup failed. Both profiles get `<dir>/config.ini`.
 fn set_up_loadout(
-    here: &Path,
     dir: &Path,
     art: &Path,
     home: &Path,
@@ -564,12 +565,11 @@ fn set_up_loadout(
         wads.join("nacht.pk3"),
         wads.join("nacht-waw.pk3"),
     ];
-    // the shipped ini, not the copy UZDoom rewrites, so a new one sets the profiles up again
-    let shipped = here.join(INI);
-    let marked = |wads: &[PathBuf]| fingerprint(&[wads, std::slice::from_ref(&shipped)].concat());
+    // the built-in ini, not the copy UZDoom rewrites, so a new one sets the profiles up again
+    let marked = |wads: &[PathBuf]| format!("{} {}", fingerprint(wads), fnv(CONFIG_INI.as_bytes()));
     let platzhalters_step = format!("profile Nacht des Platzhalters {}", marked(&platzhalters));
     let schreckens_step = format!("profile Nacht des Schreckens {}", marked(&schreckens));
-    let ini = quoted(&art.join(INI));
+    let ini = quoted(&dir.join(INI));
     let mut text = format!(
         "# The install's own loadout, and its profiles: what nacht-install keeps with `tdl setup`.\n\
          loadout = {}\nremember_loadout = false\n",
@@ -639,6 +639,14 @@ fn fingerprint(files: &[PathBuf]) -> String {
         }
         hash = (hash ^ 0xff).wrapping_mul(0x100_0000_01b3);
     }
+    format!("{hash:016x}")
+}
+
+/// The same mark of `bytes` alone.
+fn fnv(bytes: &[u8]) -> String {
+    let hash = bytes.iter().fold(0xcbf2_9ce4_8422_2325_u64, |hash, byte| {
+        (hash ^ *byte as u64).wrapping_mul(0x100_0000_01b3)
+    });
     format!("{hash:016x}")
 }
 
@@ -955,10 +963,10 @@ fn install_tdl(here: &Path, dir: &Path, mode: Mode, cli: &Cli, scratch: &Scratch
     }
 }
 
-/// Copies nacht's `config.ini` from beside this program into `art`, unless it is there already
-/// (UZDoom keeps the player's settings in it) and this isn't a reinstall.
-fn place_ini(here: &Path, art: &Path, reinstall: bool) -> Outcome<()> {
-    let to = art.join(INI);
+/// Writes the built-in `config.ini` into `dir`, unless it is there already (UZDoom keeps the
+/// player's settings in it) and this isn't a reinstall.
+fn place_ini(dir: &Path, reinstall: bool) -> Outcome<()> {
+    let to = dir.join(INI);
     if to.is_file() && !reinstall {
         journal::tell(
             "skip",
@@ -970,10 +978,10 @@ fn place_ini(here: &Path, art: &Path, reinstall: bool) -> Outcome<()> {
         );
         return Ok(());
     }
-    copy_whole(&here.join(INI), &to)?;
+    write_text(&to, CONFIG_INI)?;
     journal::tell(
         "copy",
-        &[("what", INI), ("place", &art.display().to_string())],
+        &[("what", INI), ("place", &dir.display().to_string())],
         &format!("{INI}: {}", to.display()),
     );
     Ok(())

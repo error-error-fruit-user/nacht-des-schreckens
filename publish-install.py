@@ -129,7 +129,7 @@ def ask(flags, args, plan):
 
 def plan(args):
     """What saying yes does, step by step."""
-    pk3s = ("pack nacht/ into published/releases/nacht.pk3 (with LICENSE-weather and config.ini) and "
+    pk3s = ("pack nacht/ into published/releases/nacht.pk3 (with LICENSE-weather) and "
             "../horde-hammer into horde-hammer.pk3 (in its published/releases/, and a copy here), "
             "and nacht-waw/ into published/artifacts/nacht-waw.pk3 if doomify.py has built it")
     lines = ["Saying yes will:"]

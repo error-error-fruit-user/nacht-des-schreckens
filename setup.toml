@@ -8,5 +8,3 @@ remember_loadout = false
 [[profiles]]
 name = "Nacht des Platzhalters"
 wads = ["published/releases/horde-hammer.pk3", "published/releases/nacht.pk3"]
-# nacht's keyboard controls, the copy publish.py puts beside the pk3s (UZDoom rewrites it)
-ini = "published/releases/config.ini"

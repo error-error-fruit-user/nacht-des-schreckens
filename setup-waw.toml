@@ -9,5 +9,3 @@ remember_loadout = false
 name = "Nacht des Schreckens"
 place = 1
 wads = ["published/releases/horde-hammer.pk3", "published/releases/nacht.pk3", "nacht-waw"]
-# nacht's keyboard controls, the copy publish.py puts beside the pk3s (UZDoom rewrites it)
-ini = "published/releases/config.ini"

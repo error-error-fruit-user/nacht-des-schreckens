@@ -6,7 +6,7 @@ usage: python3 publish.py [--out FILE] [--strict] [--no-library] [--no-appimages
 When Horde Hammer's repository is next to this one (../horde-hammer), it is packed too, into its own
 published/releases/ only, so its pk3 there always matches nacht (a library older than nacht stops UZDoom at
 startup with "unknown actor property"). --no-library skips that.
-With the default output, published/releases/ also gets a copy of horde-hammer.pk3 and config.ini (nacht's keyboard controls). (doomify.py and the doomify/ TOMLs are embedded in nacht-install, not published.)
+With the default output, published/releases/ also gets a copy of horde-hammer.pk3. (doomify.py and the doomify/ TOMLs are embedded in nacht-install, not published.)
 The nacht-waw/ folder is packed as published/artifacts/nacht-waw.pk3, outside that folder (when doomify.py has
 built it), so it never ships with the rest. nacht-waw is made from the player's own game: it is for
 them alone, never share it.
@@ -78,8 +78,6 @@ PACKAGE = "nacht"
 NAME = "nacht.pk3"
 # Copied next to the pk3 and into it under licenses/
 LICENSES = ["LICENSE-weather"]
-# nacht's keyboard controls, the ini a tdl profile is given: copied next to the pk3
-INI = "config.ini"
 
 OUT = os.path.join("published", "releases")
 # What running the installed game makes (nacht-waw, from the player's own game), next to OUT
@@ -269,7 +267,6 @@ def main():
         target = os.path.join(OUT, NAME)
         for license in LICENSES:
             shutil.copy(license, OUT)
-        shutil.copy(INI, OUT)
 
     pack(files, target)
     groans.built(target, len(files))
