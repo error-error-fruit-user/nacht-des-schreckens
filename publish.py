@@ -6,13 +6,13 @@ usage: python3 publish.py [--out FILE] [--strict] [--no-library] [--no-appimages
 When Horde Hammer's repository is next to this one (../horde-hammer), it is packed too, into its own
 published/releases/ only, so its pk3 there always matches nacht (a library older than nacht stops UZDoom at
 startup with "unknown actor property"). --no-library skips that.
-With the default output, published/releases/ also gets a copy of horde-hammer.pk3. (doomify.py and the doomify/ TOMLs are embedded in nacht-install, not published.)
-The nacht-waw/ folder is packed as published/artifacts/nacht-waw.pk3, outside that folder (when doomify.py has
-built it), so it never ships with the rest. nacht-waw is made from the player's own game: it is for
-them alone, never share it.
-nacht-install is built there too, as an AppImage (tools/appimage.py; needs cargo and mksquashfs)
-and as a Windows executable (cross-built for x86_64-pc-windows-gnu). The tools it installs (tdl,
-doomify-waw...) are not published here. --no-appimages skips both.
+With the default output, published/releases/ also gets a copy of horde-hammer.pk3. (The doomify/ TOMLs
+are built into install-nacht, not published.) nacht-waw, World at War's weapons, is built by
+install-nacht from the player's own game: it is for them alone, never share it.
+install-nacht is built there too, with doomify in it (from ../doomify-waw and ../hell-hound), as an
+AppImage (tools/appimage.py; needs cargo and mksquashfs) and as a Windows executable (cross-built for
+x86_64-pc-windows-gnu). The tools it installs (tdl...) are not published here. --no-appimages skips
+both.
 
 Dependency-free Python 3.8+. The pk3 is reproducible: files go in sorted order with a fixed
 timestamp, so the same folder always packs to the same bytes (and tdl hashes it the same).
@@ -80,14 +80,9 @@ NAME = "nacht.pk3"
 LICENSES = ["LICENSE-weather"]
 
 OUT = os.path.join("published", "releases")
-# What running the installed game makes (nacht-waw, from the player's own game), next to OUT
-ARTIFACTS = os.path.join("published", "artifacts")
 # The library nacht runs on, packed alongside it when its repository is here
 LIBRARY = os.path.join("..", "horde-hammer")
 LIBRARY_PK3 = "horde-hammer.pk3"
-# Built by doomify.py, loaded after nacht; packed as a pk3 in ARTIFACTS, outside OUT
-WAW = "nacht-waw"
-WAW_NAME = "nacht-waw.pk3"
 
 # 1980-01-01, the earliest time a zip can hold
 EPOCH = (1980, 1, 1, 0, 0, 0)
@@ -210,7 +205,8 @@ def set_up_platzhalters():
     groans.say("ready", f"Nacht des Platzhalters is ready to play: {command}",
                what="Nacht des Platzhalters", command=command)
     groans.other("Doom's weapons stand in for World at War's, in a loadout of nacht's own; for "
-                 "Nacht des Schreckens, start World at War on Der Riese and run doomify.py.")
+                 "Nacht des Schreckens, start World at War on Der Riese and run install-nacht "
+                 "(publish-install.py).")
 
 
 def clear(folder):
@@ -284,14 +280,6 @@ def main():
         if not options.no_library and os.path.isfile(library_pk3):
             shutil.copy(library_pk3, OUT)
             groans.built(os.path.join(OUT, LIBRARY_PK3))
-        if os.path.isdir(WAW):
-            waw_target = os.path.join(ARTIFACTS, WAW_NAME)
-            os.makedirs(ARTIFACTS, exist_ok=True)
-            waw_files = gather(WAW)
-            pack(waw_files, waw_target)
-            groans.built(waw_target, len(waw_files))
-        else:
-            groans.other(f"note: no {WAW}/ folder to pack; run doomify.py first", sys.stderr)
         if not options.no_appimages:
             appimage.build_all(OUT)
             appimage.build_exes(OUT)

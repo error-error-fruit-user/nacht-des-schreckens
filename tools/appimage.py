@@ -3,10 +3,9 @@
 
 usage: python3 tools/appimage.py [--out FOLDER] [program...]
 
-Builds nacht-install (installer/ here) with `cargo build --release`, and wraps the executable in
-nacht-install.AppImage in FOLDER (default: published/releases/). The tools it needs (tdl,
-tdl-install, doomify-waw) are not published with it: it takes them from beside it or downloads
-them. They are command-line programs: the AppImage runs the program with its arguments, and its
+Builds install-nacht (installer/ here, with doomify in it) with `cargo build --release`, and wraps
+the executable in install-nacht.AppImage in FOLDER (default: published/releases/). The tools it
+needs (tdl, install-tdl) are not published with it: it takes them from beside it or downloads them. They are command-line programs: the AppImage runs the program with its arguments, and its
 desktop entry opens a terminal.
 
 An AppImage is the runtime stub (secrets/appimage/runtime-x86_64, downloaded from
@@ -68,7 +67,7 @@ RUNTIME_URL = "https://github.com/AppImage/type2-runtime/releases/download/conti
 # program -> (checkout next to this repository, its package when the checkout has several, and
 # its Cargo.toml when that isn't the checkout's own)
 PROGRAMS = {
-    "nacht-install": ("nacht-des-schreckens", None, "installer/Cargo.toml"),
+    "install-nacht": ("nacht-des-schreckens", None, "installer/Cargo.toml"),
 }
 
 DESKTOP = """[Desktop Entry]

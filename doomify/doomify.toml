@@ -1,7 +1,9 @@
-# doomify-waw's settings for Nacht des Schreckens. Its World at War weapons and sounds aren't in
-# this repository: doomify.py rebuilds them from the player's own game, with Der Riese loaded,
-# into ../nacht-waw (a pk3 folder loaded after nacht). The weapons are weapons/*.toml, the
-# zombies' and other sounds sounds/*.toml.
+# doomify's settings for Nacht des Schreckens, built into install-nacht and put in its artifacts'
+# doomify/ (published/artifacts/doomify/ in place), where you can rewrite them for your next
+# install. Its World at War weapons and sounds aren't in this repository: install-nacht rebuilds
+# them from the player's own game, with Der Riese loaded, into ../nacht-waw (a pk3 folder, packed
+# into wads/nacht-waw.pk3, loaded after nacht). The weapons are weapons/*.toml, the zombies' and
+# other sounds sounds/*.toml.
 version = 1
 prefix = "Nacht"
 output = "../nacht-waw"

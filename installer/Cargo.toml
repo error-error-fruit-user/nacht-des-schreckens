@@ -1,18 +1,24 @@
 [package]
-name = "nacht-install"
+name = "install-nacht"
 version = "1.0.0"
 edition = "2024"
 rust-version = "1.99.1"
 license = "0BSD"
-description = "Installs Nacht des Schreckens and everything it needs, then rebuilds its World at War weapons"
+description = "Installs Nacht des Schreckens and everything it needs, then rebuilds its World at War weapons with doomify"
 
 # Its own workspace: this folder is not part of a Rust project otherwise
 [workspace]
 
 [dependencies]
+# doomify, from the Doomify WaW checkout beside nacht (with hell-hound beside it)
+doomify = { path = "../../doomify-waw" }
 regex-lite = "0.1"
 clap = { version = "4.5.41", features = ["derive", "wrap_help"] }
 sha2 = "0.10"
 toml = { version = "0.8", default-features = false, features = ["parse"] }
 ureq = "3.4.2"
 zip = { version = "2.6.1", default-features = false, features = ["deflate"] }
+
+[build-dependencies]
+anyhow = "1"
+doomify = { path = "../../doomify-waw" }

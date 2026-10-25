@@ -1,34 +1,37 @@
-//! `nacht-install`: installs Nacht des Schreckens with everything it needs, then tries to rebuild
-//! its World at War weapons and sounds with `doomify.py`. Run it from a published release folder
-//! (`published/nacht-des-schreckens/`), which has everything it installs beside it:
+//! `install-nacht`: installs Nacht des Schreckens with everything it needs, then rebuilds its
+//! World at War weapons and sounds with doomify, which it is built with. Run it from a published
+//! release folder (`published/releases/`), which has everything it installs beside it:
 //!
 //! ```text
 //! horde-hammer.pk3           the library nacht runs on
 //! nacht.pk3                  the map
 //! ```
 //!
-//! `doomify.py` and the `doomify/**/*.toml` settings are inside the installer itself (embedded by
-//! `build.rs` with `include_str!` from the repository), so to customize them, edit them and
-//! rebuild it.
+//! The `doomify/**/*.toml` settings are built into it as consts of doomify's types (`const_toml!`,
+//! made by `build.rs` from the repository), and it puts them in its artifacts' `doomify/`, which
+//! the weapons are built from: a player can rewrite them there, and they are kept until a newer
+//! install-nacht brings settings of its own, which replace them.
 //!
-//! The tools aren't in it. `tdl`, `tdl-install` and `doomify-waw` are taken from beside this
-//! program if they are there, else from the workspace's own releases when this program runs from
-//! a release folder in one (`../../../tdl/published/releases/`...), and otherwise downloaded from
-//! the latest release of their repositories on GitHub (`tdl.AppImage`/`tdl.exe`, ...). Those downloads can't be checked
-//! against a pinned hash, since the latest release isn't known when this is built; they come over
-//! HTTPS from the project's own releases.
+//! The tools aren't in it. `tdl` and `install-tdl` are taken from beside this program if they are
+//! there, else from the workspace's own releases when this program runs from a release folder in
+//! one (`../../../tdl/published/releases/`), and otherwise downloaded from the latest release of
+//! tdl on GitHub (`tdl.AppImage`/`tdl.exe`, ...). Those downloads can't be checked against a
+//! pinned hash, since the latest release isn't known when this is built; they come over HTTPS from
+//! the project's own releases.
 //!
-//! `--mode` says where to install: in place (the default) or for you, like `tdl-install`; nothing is
+//! `--mode` says where to install: in place (the default) or for you, like `install-tdl`; nothing is
 //! installed for everyone, so it never needs root or an administrator, and it won't run as root. The payload goes in that folder: the pk3s, in `wads/` (a pool tdl offers).
 //! Everything else is an artifact, in `artifacts/` there (nacht's `published/artifacts/` when this
 //! runs in place from its `published/releases/`, or `--artifacts`): tdl with UZDoom and Freedoom 2,
-//! the `doomify` machinery in `nacht-des-schreckens/`, Blender (downloaded, checked against its
-//! published SHA-256, unless it is installed already) in `blender/`, the song in `songs/`, the
-//! install's loadout and its journal. Then, if World at War is running with
-//! Der Riese loaded, it runs `doomify.py`, which takes about an hour the first time. Last, it
-//! pulls nacht's song, Der Riese's Beauty of Annihilation, out of the player's World at War
-//! (found in a Steam library, or `--waw`) into `songs/` (`--no-song` leaves it), and sets up the
-//! install's loadout with `tdl setup`, the song as tdl's.
+//! doomify's settings in `doomify/`, nacht's sprites in `nacht/` and the built weapons in
+//! `nacht-waw/`, Blender (downloaded, checked against its published SHA-256, unless it is installed
+//! already) in `blender/`, the song in `songs/`, the install's loadout and its journal. Then it
+//! builds the weapons, which needs World at War running with Der Riese loaded unless everything is
+//! in doomify's cache (about an hour the first time), and packs them into `wads/nacht-waw.pk3`.
+//! Blender's script pulls from the game by running this program again with
+//! `--script TOML --out DIR`. Last, it pulls nacht's song, Der Riese's Beauty of Annihilation, out
+//! of the player's World at War (found in a Steam library, or `--waw`) into `songs/` (`--no-song`
+//! leaves it), and sets up the install's loadout with `tdl setup`, the song as tdl's.
 
 /// The journal and the voice: installation-groans' groans.rs, built in (see `build.rs`).
 #[macro_use]
@@ -62,9 +65,10 @@ const CONFIG_INI: &str = include_str!("../../config.ini");
 /// assets named like the program, `.AppImage` on Linux and `.exe` on Windows.
 const RELEASES: &str = "https://github.com";
 const TDL_REPOSITORY: &str = "error-error-fruit-user/tdl";
-const DOOMIFY_REPOSITORY: &str = "error-error-fruit-user/doomify-waw";
 /// What the installed copy of this project is called.
 const NAME: &str = "nacht-des-schreckens";
+/// Where in the artifacts doomify's settings go (the repository's `doomify/`).
+const DOOMIFY: &str = "doomify";
 
 /// A song of World at War's a map brings: pulled from the player's own game into the install's
 /// `songs/` (it never comes with the map) and kept as tdl's song. Each map has its own.
@@ -91,46 +95,15 @@ const SONG: Song = Song {
 /// World at War's folder in a Steam library.
 const WORLD_AT_WAR: &str = "steamapps/common/Call of Duty World at War";
 
-/// A TOML file of the repository, embedded when this is built.
-#[derive(Clone, Copy, Debug)]
-pub struct Toml {
-    /// Where it is in the repository.
-    pub path: &'static str,
-    /// What is in it, as the repository had it when this was built.
-    pub source: &'static str,
-}
-
-impl Toml {
-    /// The file parsed, for looking at its settings.
-    pub fn table(&self) -> Result<toml::Table, toml::de::Error> {
-        self.source.parse()
-    }
-}
-
-/// Embeds a TOML file of the repository as a [`Toml`], in a const. The path is from the
-/// repository's root (this installer is in `installer/`, one level down):
-///
-/// ```ignore
-/// const colt: Toml = const_toml!["doomify/weapons/colt.toml"];
-/// ```
-///
-/// `build.rs` makes one for every TOML under `doomify/`, named after its path in upper case
-/// (`DOOMIFY_WEAPONS_COLT_TOML`); to add settings of your own, put the file there (the next build
-/// picks it up) or call this by hand. Edit a file, then rebuild.
-macro_rules! const_toml {
-    ($path:literal) => {
-        $crate::Toml {
-            path: $path,
-            source: include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../", $path)),
-        }
-    };
-}
-
-/// `doomify.py` and `doomify/**/*.toml`, as consts (`DOOMIFY_PY`, `DOOMIFY_WEAPONS_COLT_TOML`...)
-/// and the tables `FILES`, `WEAPONS` and `SOUNDS`, as the repository had them when this was built.
-#[allow(dead_code)] // the per-file consts and tables are there to be used when customizing
+/// `doomify/**/*.toml`, as consts of doomify's types, each made by doomify's `const_toml!` from
+/// the file `build.rs` read with serde (`DOOMIFY_WEAPONS_COLT_TOML` is a `Weapon`), and the tables
+/// `FILES` (each file's text), `WEAPONS`, `SOUNDS` and `CONFIG`, as the repository had them when
+/// this was built. To build a TOML of your own in: put it in `doomify/` (the next build picks it
+/// up), or by hand, `const MINE: Weapon = const_toml!["doomify/weapons/mine.toml"];` once
+/// `build.rs` writes it.
+#[allow(dead_code)] // the per-file consts are there to be used when customizing
 mod embedded {
-    use crate::Toml;
+    use doomify::{const_toml, types::*};
 
     include!(concat!(env!("OUT_DIR"), "/embedded.rs"));
 }
@@ -143,7 +116,7 @@ struct Download {
     sha256: &'static str,
 }
 
-/// Blender 4.2.9 LTS for Linux; doomify-waw needs 4.0 or newer. The hash is the one in the
+/// Blender 4.2.9 LTS for Linux; doomify needs 4.0 or newer. The hash is the one in the
 /// release's `blender-4.2.9.sha256`.
 const BLENDER_LINUX: Download = Download {
     name: "blender-4.2.9-linux-x64.tar.xz",
@@ -179,19 +152,19 @@ struct Cli {
     /// mode's own folder.
     #[arg(long, value_name = "DIR")]
     dir: Option<PathBuf>,
-    /// Leaves tdl, UZDoom and Freedoom 2 out (`tdl-install` isn't run).
+    /// Leaves tdl, UZDoom and Freedoom 2 out (`install-tdl` isn't run).
     #[arg(long)]
     no_tdl: bool,
-    /// Passed to tdl-install: leaves UZDoom out.
+    /// Passed to install-tdl: leaves UZDoom out.
     #[arg(long)]
     no_uzdoom: bool,
-    /// Passed to tdl-install: leaves Freedoom 2 out.
+    /// Passed to install-tdl: leaves Freedoom 2 out.
     #[arg(long)]
     no_freedoom: bool,
     /// Doesn't download Blender.
     #[arg(long)]
     no_blender: bool,
-    /// Doesn't run doomify.py.
+    /// Doesn't build the weapons with doomify.
     #[arg(long)]
     no_doomify: bool,
     /// Doesn't open tdl on the install's loadout at the end
@@ -200,23 +173,24 @@ struct Cli {
     /// Doesn't pull nacht's song (Beauty of Annihilation) from World at War for tdl to play
     #[arg(long)]
     no_song: bool,
-    /// Where everything but the pk3s goes (tdl, UZDoom, Freedoom 2, Blender, doomify.py, the song,
-    /// the loadout, the journal). Defaults to `artifacts/` in the install's folder, or nacht's
+    /// Where everything but the pk3s goes (tdl, UZDoom, Freedoom 2, Blender, doomify's settings and
+    /// what it builds, the song, the loadout, the journal). Defaults to `artifacts/` in the install's folder, or nacht's
     /// `published/artifacts/` when this runs in place from its `published/releases/`.
     #[arg(long, value_name = "DIR")]
     artifacts: Option<PathBuf>,
     /// World at War's folder, if it isn't in a Steam library this can find
     #[arg(long, value_name = "DIR")]
     waw: Option<PathBuf>,
-    /// The Blender doomify.py renders with, instead of finding or downloading one.
+    /// The Blender doomify renders with, instead of finding or downloading one.
     #[arg(long, value_name = "PATH")]
     blender: Option<PathBuf>,
-    /// Does everything again, where a run picks up where the last one left off: tdl, the weapons,
-    /// the song (put back as tdl's though another was picked since) and the profiles
+    /// Does everything again, where a run picks up where the last one left off: tdl, doomify's
+    /// settings (yours replaced), the weapons, the song (put back as tdl's though another was
+    /// picked since) and the profiles
     #[arg(long)]
     reinstall: bool,
-    /// Pulls and renders every weapon again (doomify.py with doomify-waw's --force), though they
-    /// were built and are in the cache; needs World at War running
+    /// Pulls and renders every weapon again (doomify's force), though they were built and are in
+    /// the cache; needs World at War running
     #[arg(long)]
     rerender: bool,
     /// Makes a shortcut on the desktop that opens tdl on the install's loadout, with the system's
@@ -228,7 +202,7 @@ struct Cli {
     #[arg(long)]
     menu_entry: bool,
     /// Says what it does plainly and formally, rather than as a descent through hell (and has
-    /// tdl-install and doomify.py do the same)
+    /// install-tdl do the same)
     #[arg(long)]
     computer_speak: bool,
 }
@@ -245,8 +219,6 @@ macro_rules! const_groan {
 const TOILING_THROUGH_HELL: &str = const_groan!["toiling-through-hell.toml"];
 /// Computer Speak, for `--computer-speak`.
 const COMPUTER_SPEAK: &str = const_groan!["computer-speak.toml"];
-/// groans.py, which doomify.py speaks through, put beside the installed copy.
-const GROANS_PY: &str = const_groan!["groans.py"];
 
 /// Where nacht lives.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, ValueEnum)]
@@ -280,12 +252,43 @@ fn program_dir() -> Option<PathBuf> {
 }
 
 fn main() -> ExitCode {
+    // 🎣 Blender's script pulls what a TOML names from the game through this program
+    let args: Vec<OsString> = std::env::args_os().collect();
+    if args.get(1).is_some_and(|arg| arg == "--script") {
+        return pull_for_blender(&args[1..]);
+    }
     let cli = Cli::parse();
     journal::speak_in(TOILING_THROUGH_HELL, COMPUTER_SPEAK, cli.computer_speak);
     match run(cli) {
         Ok(()) => ExitCode::SUCCESS,
         Err(problem) => {
             warn!("{problem}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// `--script TOML --out DIR [--pid N]`, run by doomify's Blender script: pulls what the TOML names
+/// from the running game into DIR.
+fn pull_for_blender(args: &[OsString]) -> ExitCode {
+    let (mut script, mut out, mut pid) = (None, None, None);
+    let mut args = args.iter();
+    while let Some(arg) = args.next() {
+        match arg.to_str() {
+            Some("--script") => script = args.next().map(PathBuf::from),
+            Some("--out") => out = args.next().map(PathBuf::from),
+            Some("--pid") => pid = args.next().and_then(|n| n.to_str()?.parse().ok()),
+            _ => {}
+        }
+    }
+    let (Some(script), Some(out)) = (script, out) else {
+        eprintln!("--script needs a TOML and --out DIR");
+        return ExitCode::FAILURE;
+    };
+    match doomify::script::run(&script, &out, pid) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(problem) => {
+            eprintln!("{problem:#}");
             ExitCode::FAILURE
         }
     }
@@ -311,7 +314,7 @@ fn plan(cli: &Cli, dir: &Path, art: &Path) -> Vec<String> {
             ""
         ),
         format!(
-            "  - put everything else, its artifacts, in {}: doomify.py with its settings, a doomify-waw, the loadout and its log",
+            "  - put everything else, its artifacts, in {}: doomify's settings (the weapons' TOMLs, yours to rewrite; a newer install-nacht's replace them), the built weapons, the loadout and its log",
             art.display()
         ),
     ];
@@ -321,7 +324,7 @@ fn plan(cli: &Cli, dir: &Path, art: &Path) -> Vec<String> {
             .filter_map(|(name, left_out)| (!left_out).then_some(name))
             .collect();
         lines.push(format!(
-            "  - run tdl-install, which puts tdl in the artifacts{}{}",
+            "  - run install-tdl, which puts tdl in the artifacts{}{}",
             if cli.mode == Mode::InPlace {
                 ""
             } else {
@@ -354,7 +357,7 @@ fn plan(cli: &Cli, dir: &Path, art: &Path) -> Vec<String> {
     }
     if !cli.no_doomify {
         lines.push(
-            "  - if World at War is running, run doomify.py, which rebuilds the weapons from your game (about an hour the first time) and may install git and Rust to build doomify-waw"
+            "  - rebuild the weapons from your game with doomify, if World at War is running or everything is in doomify's cache (about an hour the first time), into wads/nacht-waw.pk3"
                 .into(),
         );
     }
@@ -379,7 +382,12 @@ fn plan(cli: &Cli, dir: &Path, art: &Path) -> Vec<String> {
     let earlier: Vec<&str> = steps
         .earlier()
         .into_iter()
-        .filter(|step| !step.starts_with("profile ") && !step.starts_with("tdl-install"))
+        .filter(|step| {
+            !step.starts_with("profile ")
+                && !step.starts_with("install-tdl")
+                && !step.starts_with("weapons ")
+                && !step.starts_with("settings ")
+        })
         .collect();
     if !earlier.is_empty() {
         lines.push(format!(
@@ -463,18 +471,11 @@ fn run(mut cli: Cli) -> Outcome<()> {
             steps.finish("tdl");
         }
     }
-    let home = art.join(NAME);
     journal::section("install");
-    place_files(&here, &dir, &home, &scratch, cli.reinstall)?;
+    place_files(&here, &dir)?;
     place_ini(&dir, cli.reinstall)?;
-
-    let python = find_python();
-    if python.is_none() {
-        say!(
-            "Python 3 wasn't found, and doomify.py needs it: install it (python.org), then run it in {}",
-            home.display()
-        );
-    }
+    let settings = art.join(DOOMIFY);
+    place_settings(&settings, &mut steps)?;
     let blender = match &cli.blender {
         Some(path) => Some(path.clone()),
         None if cli.no_blender => find_blender(&art),
@@ -482,15 +483,22 @@ fn run(mut cli: Cli) -> Outcome<()> {
     };
     note!("blender: {:?}", blender);
     let built = dir.join("wads").join("nacht-waw.pk3");
-    // 🔫 built again when doomify-waw's versions or nacht's weapon settings changed (doomify-waw's
-    // cache keeps what they didn't touch), so a newer render script's frames reach the install
-    let weapons = format!("weapons {}", weapons_mark(&home));
+    // 🔫 built again when doomify's source or the installed settings changed (doomify's cache
+    // keeps what they didn't touch: only what a changed part of its render script draws, or a
+    // rewritten TOML, is rendered again)
+    let weapons = format!("weapons {}", weapons_mark(&settings));
     if !cli.no_doomify && !cli.rerender && steps.done(&weapons) && built.is_file() {
         journal::section("weapons");
         steps.skip("nacht-waw.pk3", &built.display().to_string());
     } else if !cli.no_doomify
-        && let Some(python) = python
-        && doomify(&python, &home, &dir, blender.as_deref(), cli.rerender)
+        && build_weapons(
+            &here,
+            &art,
+            &settings,
+            &built,
+            blender.as_deref(),
+            cli.rerender,
+        )
     {
         steps.finish(&weapons);
     }
@@ -505,7 +513,7 @@ fn run(mut cli: Cli) -> Outcome<()> {
         journal::section("song");
         pull_song(&SONG, &art, cli.waw.as_deref())
     };
-    let tdl = set_up_loadout(&dir, &art, &home, song.as_deref(), &mut steps);
+    let tdl = set_up_loadout(&dir, &art, song.as_deref(), &mut steps);
     if let Some(tdl) = &tdl {
         let mut command = vec![tdl.display().to_string(), "--session".into()];
         command.extend([
@@ -529,15 +537,13 @@ fn run(mut cli: Cli) -> Outcome<()> {
     Ok(())
 }
 
-/// The install's own loadout (`<art>/loadout`, in the artifacts): `setup.toml` beside doomify.py
-/// makes Nacht des Platzhalters in it, and Nacht des Schreckens once `nacht-waw.pk3` is in the wad
+/// The install's own loadout (`<art>/loadout`, in the artifacts): `setup-nacht.toml` there makes Nacht des Platzhalters in it, and Nacht des Schreckens once `nacht-waw.pk3` is in the wad
 /// pool (`<dir>/wads`), and the tdl the install put in `art` (or the one on the PATH) runs
 /// `tdl setup` on it. Returns that tdl, or
 /// `None` (said) when there is none or the setup failed. Both profiles get `<dir>/config.ini`.
 fn set_up_loadout(
     dir: &Path,
     art: &Path,
-    home: &Path,
     song: Option<&Path>,
     steps: &mut journal::Steps,
 ) -> Option<PathBuf> {
@@ -553,7 +559,7 @@ fn set_up_loadout(
         });
     let Some(tdl) = tdl else {
         warn!(
-            "There is no tdl to set up the profiles with (tdl-install puts one in {})",
+            "There is no tdl to set up the profiles with (install-tdl puts one in {})",
             art.display()
         );
         return None;
@@ -574,7 +580,7 @@ fn set_up_loadout(
     let schreckens_step = format!("profile Nacht des Schreckens {}", marked(&schreckens));
     let ini = quoted(&dir.join(INI));
     let mut text = format!(
-        "# The install's own loadout, and its profiles: what nacht-install keeps with `tdl setup`.\n\
+        "# The install's own loadout, and its profiles: what install-nacht keeps with `tdl setup`.\n\
          loadout = {}\nremember_loadout = false\n",
         quoted(&art.join("loadout")),
     );
@@ -608,7 +614,7 @@ fn set_up_loadout(
         );
         return Some(tdl);
     }
-    let setup = home.join("setup.toml");
+    let setup = art.join("setup-nacht.toml");
     if let Err(problem) = write_text(&setup, &text) {
         warn!("{problem}");
         return None;
@@ -645,29 +651,119 @@ fn fingerprint(files: &[PathBuf]) -> String {
     format!("{hash:016x}")
 }
 
-/// The mark of what builds nacht-waw: the versions the doomify-waw in `home` gives (its render
-/// script's parts and its assembly, `doomify-waw versions`; its bytes for one too old to give
-/// them) and the doomify.py and settings this was built with.
-fn weapons_mark(home: &Path) -> String {
-    let doomify_waw = home.join(if cfg!(windows) {
-        "doomify-waw.exe"
-    } else {
-        "doomify-waw"
-    });
-    let versions = Command::new(&doomify_waw)
-        .arg("versions")
-        .output()
-        .ok()
-        .filter(|output| output.status.success())
-        .map(|output| fnv(&output.stdout))
-        .unwrap_or_else(|| fingerprint(&[doomify_waw]));
-    let settings: Vec<u8> = embedded::FILES
+/// The mark of what builds nacht-waw: doomify's own source (`FINGERPRINT`) and the settings in
+/// `settings` the weapons are built from (a player's rewritten ones among them).
+fn weapons_mark(settings: &Path) -> String {
+    let mut files = Vec::new();
+    files_under(settings, &mut files);
+    files.sort();
+    format!("{} {}", doomify::FINGERPRINT, fingerprint(&files))
+}
+
+/// Every file under `folder`.
+fn files_under(folder: &Path, found: &mut Vec<PathBuf>) {
+    for entry in fs::read_dir(folder).into_iter().flatten().flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            files_under(&path, found);
+        } else {
+            found.push(path);
+        }
+    }
+}
+
+/// Puts doomify's settings, built in from the repository's `doomify/`, in `settings`, which the
+/// weapons are built from. A player may rewrite them there, and they are kept (said so) until this
+/// is an install-nacht whose settings differ from the ones put there last, a newer release's,
+/// which replace them (`--reinstall` too).
+fn place_settings(settings: &Path, steps: &mut journal::Steps) -> Outcome<()> {
+    let texts: Vec<u8> = embedded::FILES
         .iter()
-        .flat_map(|(inside, contents)| [inside.as_bytes(), contents.as_bytes()])
+        .flat_map(|(inside, text)| [inside.as_bytes(), text.as_bytes()])
         .flatten()
         .copied()
         .collect();
-    format!("{versions} {}", fnv(&settings))
+    let step = format!("settings {}", fnv(&texts));
+    let rewritten: Vec<&str> = embedded::FILES
+        .iter()
+        .map(|(inside, _)| *inside)
+        .filter(|inside| !same_as_built(settings, inside))
+        .collect();
+    let named = |files: &[&str]| {
+        files
+            .iter()
+            .map(|inside| inside.strip_prefix("doomify/").unwrap_or(inside))
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    if steps.done(&step) {
+        if rewritten.is_empty() {
+            steps.skip("doomify's settings", &settings.display().to_string());
+        } else {
+            say!(
+                "Your settings in {} are kept, and the weapons are built from them: {}",
+                settings.display(),
+                named(&rewritten)
+            );
+        }
+        return Ok(());
+    }
+    for (inside, text) in embedded::FILES {
+        write_text(&setting(settings, inside), text)?;
+    }
+    if !rewritten.is_empty() && settings.join("doomify.toml").is_file() {
+        say!(
+            "This install-nacht's settings replace the ones in {} that differ: {}",
+            settings.display(),
+            named(&rewritten)
+        );
+    }
+    journal::tell(
+        "copy",
+        &[
+            ("what", "doomify's settings"),
+            ("place", &settings.display().to_string()),
+        ],
+        &format!("doomify's settings: {}", settings.display()),
+    );
+    steps.finish(&step);
+    Ok(())
+}
+
+/// Where the built-in `inside` (`doomify/weapons/colt.toml`) goes in `settings`.
+fn setting(settings: &Path, inside: &str) -> PathBuf {
+    settings.join(inside.strip_prefix("doomify/").unwrap_or(inside))
+}
+
+/// Whether the installed copy of the built-in `inside` reads as the same settings, as doomify reads
+/// it (comments and layout aside).
+fn same_as_built(settings: &Path, inside: &str) -> bool {
+    let Ok(text) = fs::read_to_string(setting(settings, inside)) else {
+        return false;
+    };
+    let id = Path::new(inside)
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .unwrap_or_default();
+    if inside.starts_with("doomify/weapons/") {
+        embedded::WEAPONS.iter().any(|(built_id, built)| {
+            *built_id == id
+                && toml::from_str::<doomify::types::Weapon>(&text)
+                    .ok()
+                    .as_ref()
+                    == Some(built)
+        })
+    } else if inside.starts_with("doomify/sounds/") {
+        embedded::SOUNDS.iter().any(|(built_id, built)| {
+            *built_id == id
+                && toml::from_str::<doomify::types::SoundSet>(&text)
+                    .ok()
+                    .as_ref()
+                    == Some(built)
+        })
+    } else {
+        toml::from_str::<doomify::types::Config>(&text).ok() == Some(embedded::CONFIG)
+    }
 }
 
 /// The same mark of `bytes` alone.
@@ -916,13 +1012,6 @@ fn beside(here: &Path, name: &str) -> Option<PathBuf> {
         .find(|path| path.is_file())
 }
 
-/// The copy of `name` that `get_tool` takes without downloading: the one beside this program or
-/// the workspace's release.
-fn local_tool(here: &Path, name: &str, repository: &str) -> Option<PathBuf> {
-    let project = repository.rsplit('/').next().unwrap_or(repository);
-    beside(here, name).or_else(|| from_workspace(here, project, name))
-}
-
 /// The workspace's own release of the program `name`, when this program runs from a project's
 /// release folder in a workspace that has `project` too: from
 /// `<workspace>/<this project>/published/releases/`, that is
@@ -942,13 +1031,13 @@ fn from_workspace(here: &Path, project: &str, name: &str) -> Option<PathBuf> {
     path.is_file().then_some(path)
 }
 
-/// Runs the `tdl-install` that puts tdl, UZDoom and Freedoom 2 in `dir`. It and tdl are staged
-/// side by side first, since tdl-install copies the tdl it finds beside itself.
+/// Runs the `install-tdl` that puts tdl, UZDoom and Freedoom 2 in `dir`. It and tdl are staged
+/// side by side first, since install-tdl copies the tdl it finds beside itself.
 fn install_tdl(here: &Path, dir: &Path, mode: Mode, cli: &Cli, scratch: &Scratch) -> Outcome<()> {
     let stage = scratch.dir()?.join("tools");
-    let installer = stage.join(asset("tdl-install"));
+    let installer = stage.join(asset("install-tdl"));
     let tdl = stage.join(asset("tdl"));
-    get_tool(here, "tdl-install", TDL_REPOSITORY, &installer, scratch)?;
+    get_tool(here, "install-tdl", TDL_REPOSITORY, &installer, scratch)?;
     get_tool(here, "tdl", TDL_REPOSITORY, &tdl, scratch)?;
     if mode == Mode::InPlace {
         // 🧱 in place there is no copying: tdl is simply put where it will live
@@ -968,7 +1057,7 @@ fn install_tdl(here: &Path, dir: &Path, mode: Mode, cli: &Cli, scratch: &Scratch
     let mut command = Command::new(&installer);
     // 📦 the installer is its own AppImage, if it is one
     command.env_remove("APPIMAGE");
-    // 🗃️ tdl is an artifact here, and so is all tdl-install makes beside it
+    // 🗃️ tdl is an artifact here, and so is all install-tdl makes beside it
     journal::child(&mut command, true);
     command
         .arg("--accept")
@@ -993,11 +1082,11 @@ fn install_tdl(here: &Path, dir: &Path, mode: Mode, cli: &Cli, scratch: &Scratch
     let status = command
         .status()
         .map_err(|error| format!("couldn't run {}: {error}", installer.display()))?;
-    note!("tdl-install ended: {status}");
+    note!("install-tdl ended: {status}");
     if status.success() {
         Ok(())
     } else {
-        Err(format!("tdl-install failed ({status})"))
+        Err(format!("install-tdl failed ({status})"))
     }
 }
 
@@ -1025,15 +1114,8 @@ fn place_ini(dir: &Path, reinstall: bool) -> Outcome<()> {
     Ok(())
 }
 
-/// Puts the pk3s in `<dir>/wads/` and the doomify machinery in `home`: doomify.py, its settings,
-/// doomify-waw and the sprites of nacht.pk3, which doomify-waw reads to avoid their names.
-fn place_files(
-    here: &Path,
-    dir: &Path,
-    home: &Path,
-    scratch: &Scratch,
-    reinstall: bool,
-) -> Outcome<()> {
+/// Puts the pk3s in `<dir>/wads/`.
+fn place_files(here: &Path, dir: &Path) -> Outcome<()> {
     let wads = dir.join("wads");
     for pk3 in PK3S {
         copy_whole(&here.join(pk3), &wads.join(pk3))?;
@@ -1043,60 +1125,6 @@ fn place_files(
             &format!("{pk3}: {}", wads.join(pk3).display()),
         );
     }
-    for (inside, contents) in embedded::FILES {
-        write_text(&home.join(inside), contents)?;
-    }
-    // 🗣️ the voices this was built with, for doomify.py, which has no workspace beside it here
-    for (voice, contents) in [
-        ("toiling-through-hell.toml", TOILING_THROUGH_HELL),
-        ("computer-speak.toml", COMPUTER_SPEAK),
-        ("groans.py", GROANS_PY),
-    ] {
-        if !contents.is_empty() {
-            write_text(&home.join("groans").join(voice), contents)?;
-        }
-    }
-    note!(
-        "wrote doomify.py and its {} settings into {}",
-        embedded::FILES.len() - 1,
-        home.display()
-    );
-    // 🗃️ doomify.py's artifacts are beside it here, in the install's artifacts
-    let to = home.join(if cfg!(windows) {
-        "doomify-waw.exe"
-    } else {
-        "doomify-waw"
-    });
-    // 🔁 kept only while it is the one this would copy (a newer release beside this program or in
-    // the workspace replaces it); with none to copy, it isn't downloaded again
-    let current = match local_tool(here, "doomify-waw", DOOMIFY_REPOSITORY) {
-        Some(from) => fs::read(&from).ok() == fs::read(&to).ok(),
-        None => true,
-    };
-    // Not fatal: without it doomify.py builds doomify-waw from its source (git and cargo)
-    if to.is_file() && current && !reinstall {
-        journal::tell(
-            "skip",
-            &[
-                ("what", "doomify-waw"),
-                ("place", &to.display().to_string()),
-            ],
-            &format!("doomify-waw is there already: {}", to.display()),
-        );
-    } else if let Err(problem) = get_tool(here, "doomify-waw", DOOMIFY_REPOSITORY, &to, scratch) {
-        warn!(
-            "{problem}\ndoomify-waw wasn't installed, so doomify.py will try to build it from source (it needs git and cargo)"
-        );
-    }
-    unpack_sprites(&here.join("nacht.pk3"), &home.join("nacht"))?;
-    journal::tell(
-        "copy",
-        &[
-            ("what", "doomify.py"),
-            ("place", &home.display().to_string()),
-        ],
-        &format!("doomify.py: {}", home.display()),
-    );
     Ok(())
 }
 
@@ -1193,30 +1221,8 @@ fn make_executable(path: &Path) -> Outcome<()> {
     Ok(())
 }
 
-/// The Python 3 that runs doomify.py, if one is installed.
-fn find_python() -> Option<OsString> {
-    let found = find_python_quietly();
-    note!("python: {:?}", found);
-    found
-}
-
-fn find_python_quietly() -> Option<OsString> {
-    let candidates: &[&str] = if cfg!(windows) {
-        &["python", "py"]
-    } else {
-        &["python3", "python"]
-    };
-    candidates.iter().find_map(|name| {
-        let output = Command::new(name).arg("--version").output().ok()?;
-        let text = String::from_utf8_lossy(&output.stdout).to_string()
-            + &String::from_utf8_lossy(&output.stderr);
-        (output.status.success() && text.trim_start().starts_with("Python 3"))
-            .then(|| OsString::from(name))
-    })
-}
-
 /// A Blender that is installed already: the one we put in `<dir>/blender/`, `$BLENDER`, or one on
-/// the PATH. doomify-waw looks in a few more places itself when given none.
+/// the PATH. doomify looks in a few more places itself when given none.
 fn find_blender(dir: &Path) -> Option<PathBuf> {
     if let Some(ours) = blender_in(&dir.join("blender")) {
         return Some(ours);
@@ -1264,7 +1270,7 @@ fn ensure_blender(dir: &Path) -> Outcome<Option<PathBuf>> {
     } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
         &BLENDER_LINUX
     } else {
-        say!("Blender has no pinned release here: install it (blender.org) for doomify.py");
+        say!("Blender has no pinned release here: install it (blender.org) for doomify");
         return Ok(None);
     };
     journal::section("download");
@@ -1334,87 +1340,79 @@ fn unpack_zip(file: &Path, folder: &Path) -> Outcome<()> {
     Ok(())
 }
 
-/// Runs doomify.py in `home` when World at War is running, then puts the packed
-/// `nacht-waw.pk3` in the wad pool. Nothing here is an error: the rest is installed, and the
-/// command to run later is printed.
-fn doomify(
-    python: &OsString,
-    home: &Path,
-    dir: &Path,
+/// Builds the weapons with doomify from the settings in `settings` into `<art>/nacht-waw/`, and
+/// packs them into `packed` (the wad pool's `nacht-waw.pk3`). It needs World at War running with
+/// Der Riese loaded unless everything is in doomify's cache. Whether it built them.
+fn build_weapons(
+    here: &Path,
+    art: &Path,
+    settings: &Path,
+    packed: &Path,
     blender: Option<&Path>,
     rerender: bool,
 ) -> bool {
-    // 📦 packed straight into the wad pool, one step rather than a pack and a copy
-    let packed = dir.join("wads").join("nacht-waw.pk3");
-    let mut args: Vec<OsString> = vec![
-        "doomify.py".into(),
-        "--pack-to".into(),
-        packed.clone().into(),
-        "--accept".into(),
-    ];
-    if rerender {
-        args.push("--rerender".into());
-    }
-    if let Some(blender) = blender {
-        args.extend(["--".into(), "--blender".into(), blender.into()]);
-    }
-    let shown: Vec<_> = args.iter().map(|arg| arg.to_string_lossy()).collect();
-    let later = format!(
-        "To make the weapons later, start World at War, load Der Riese in solo Zombies, and run in {}: {} {}",
-        home.display(),
-        python.to_string_lossy(),
-        shown.join(" ")
-    );
     journal::section("weapons");
-    if !world_at_war_running() {
+    let later = "To build them later, start World at War, load Der Riese in solo Zombies, and run this again";
+    // 🎨 nacht's own sprites, whose names the weapons' never take (sprites_of in doomify.toml)
+    if let Err(problem) = unpack_sprites(&here.join("nacht.pk3"), &art.join("nacht")) {
+        warn!("{problem}");
+        return false;
+    }
+    let mut project = match doomify::project::Project::load(settings) {
+        Ok(project) => project,
+        Err(problem) => {
+            warn!(
+                "doomify's settings in {} don't read: {problem:#}",
+                settings.display()
+            );
+            return false;
+        }
+    };
+    project.config.pack = Some(packed.display().to_string().into());
+    let running = world_at_war_running();
+    if running {
+        journal::tell(
+            "detected",
+            &[
+                ("what", "World at War"),
+                ("doing", "building nacht-waw from it with doomify"),
+            ],
+            "World at War is running: building nacht-waw from it with doomify",
+        );
+    } else {
         journal::tell(
             "undetected",
             &[
                 ("what", "World at War"),
-                ("instead", &format!("nacht-waw isn't built. {later}")),
+                (
+                    "instead",
+                    "nacht-waw is built from doomify's cache, if everything is in it",
+                ),
             ],
-            &format!("World at War isn't running, so nacht-waw isn't built. {later}"),
+            "World at War isn't running, so nacht-waw is built from doomify's cache, if everything is in it",
         );
-        return false;
     }
-    journal::tell(
-        "detected",
-        &[
-            ("what", "World at War"),
-            ("doing", "building nacht-waw from it with doomify.py"),
-        ],
-        "World at War is running: building nacht-waw from it with doomify.py",
-    );
-    let later = || say!("{later}");
-    note!(
-        "running {} {} in {}",
-        python.to_string_lossy(),
-        args.iter()
-            .map(|arg| arg.to_string_lossy())
-            .collect::<Vec<_>>()
-            .join(" "),
-        home.display()
-    );
-    let mut command = Command::new(python);
-    command.args(&args).current_dir(home);
-    journal::child(&mut command, true);
-    match command.status() {
-        Ok(status) if status.success() => packed.is_file(),
-        Ok(status) => {
-            warn!("doomify.py failed ({status}).");
-            later();
-            false
-        }
-        Err(error) => {
-            warn!("Couldn't run doomify.py: {error}");
-            later();
+    let options = doomify::pipeline::Options {
+        blender: blender.map(Path::to_path_buf),
+        force: rerender,
+        say: journal::other,
+        run: journal::run,
+        ..Default::default()
+    };
+    match doomify::pipeline::build(&project, &options) {
+        Ok(()) => packed.is_file(),
+        Err(problem) => {
+            warn!("The weapons weren't built: {problem:#}");
+            if !running {
+                say!("{later}");
+            }
             false
         }
     }
 }
 
 /// Whether World at War runs now (its CoDWaW.exe, under Windows or Wine and Proton), which
-/// doomify.py takes the weapons from.
+/// doomify takes the weapons from.
 fn world_at_war_running() -> bool {
     if cfg!(windows) {
         return Command::new("tasklist")
@@ -1480,7 +1478,7 @@ fn refuse_root() -> Outcome<()> {
             .output()
             .is_ok_and(|output| output.stdout.trim_ascii() == b"0");
         if root {
-            return Err("Don't run nacht-install as root (with sudo): it installs Nacht des Schreckens for you, or in place, and needs no root".into());
+            return Err("Don't run install-nacht as root (with sudo): it installs Nacht des Schreckens for you, or in place, and needs no root".into());
         }
     }
     Ok(())
@@ -1613,7 +1611,7 @@ struct Scratch(PathBuf);
 
 impl Scratch {
     fn new() -> Self {
-        Self(std::env::temp_dir().join(format!("nacht-install-{}", std::process::id())))
+        Self(std::env::temp_dir().join(format!("install-nacht-{}", std::process::id())))
     }
 
     fn dir(&self) -> Outcome<&Path> {
@@ -1635,7 +1633,7 @@ mod tests {
 
     fn altar(name: &str) -> PathBuf {
         let dir =
-            std::env::temp_dir().join(format!("nacht-install-test-{name}-{}", std::process::id()));
+            std::env::temp_dir().join(format!("install-nacht-test-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir
@@ -1689,49 +1687,66 @@ mod tests {
     }
 
     #[test]
-    fn the_settings_are_embedded() {
-        let names: Vec<_> = embedded::FILES.iter().map(|(name, _)| *name).collect();
-        assert!(names.contains(&"doomify.py"));
-        assert_eq!(embedded::DOOMIFY_PY, embedded::FILES[0].1);
-        assert!(embedded::DOOMIFY_DOOMIFY_TOML.source.contains("prefix"));
-        assert_eq!(embedded::DOOMIFY_DOOMIFY_TOML.path, "doomify/doomify.toml");
+    fn the_settings_are_built_in_as_doomifys_types() {
+        // a const, read with serde when this was built
+        const COLT: doomify::types::Weapon = embedded::DOOMIFY_WEAPONS_COLT_TOML;
+        assert_eq!(COLT.sprite, "CL");
+        assert_eq!(embedded::CONFIG.prefix, "Nacht");
         assert!(
             embedded::WEAPONS
                 .iter()
-                .any(|(name, _)| *name == "doomify/weapons/colt.toml")
+                .any(|(id, weapon)| *id == "colt" && *weapon == COLT)
         );
-        assert!(embedded::WEAPONS.contains(&(
-            "doomify/weapons/colt.toml",
-            embedded::DOOMIFY_WEAPONS_COLT_TOML.source
-        )));
-        assert!(
-            embedded::SOUNDS
-                .iter()
-                .all(|(name, _)| name.starts_with("doomify/sounds/"))
-        );
+        assert!(!embedded::SOUNDS.is_empty());
+        let names: Vec<_> = embedded::FILES.iter().map(|(name, _)| *name).collect();
         assert!(names.contains(&"doomify/doomify.toml"));
-        assert!(
+        assert_eq!(
             names
                 .iter()
-                .any(|name| name.starts_with("doomify/weapons/"))
+                .filter(|name| name.starts_with("doomify/weapons/"))
+                .count(),
+            embedded::WEAPONS.len()
         );
-        assert!(
-            embedded::FILES
+        // and each file's text reads as the const built from it
+        for (id, weapon) in embedded::WEAPONS {
+            let (_, text) = embedded::FILES
                 .iter()
-                .all(|(_, contents)| !contents.is_empty())
-        );
+                .find(|(name, _)| *name == format!("doomify/weapons/{id}.toml"))
+                .unwrap();
+            assert_eq!(
+                &toml::from_str::<doomify::types::Weapon>(text).unwrap(),
+                weapon
+            );
+        }
     }
 
     #[test]
-    fn every_embedded_toml_parses() {
-        for (name, source) in embedded::FILES
-            .iter()
-            .filter(|(name, _)| name.ends_with(".toml"))
-        {
-            assert!(source.parse::<toml::Table>().is_ok(), "{name} isn't TOML");
-        }
-        let colt = embedded::DOOMIFY_WEAPONS_COLT_TOML.table().unwrap();
-        assert!(!colt.is_empty());
+    fn rewritten_settings_are_kept_until_new_ones_come() {
+        let dir = altar("settings");
+        let settings = dir.join("doomify");
+        let art = dir.join("art");
+        let mut steps = journal::Steps::open(&art, false);
+        place_settings(&settings, &mut steps).unwrap();
+        assert!(
+            embedded::FILES
+                .iter()
+                .all(|(inside, _)| same_as_built(&settings, inside))
+        );
+        // a player's rewrite, and a comment alone, which reads the same
+        let colt = settings.join("weapons/colt.toml");
+        let text = fs::read_to_string(&colt).unwrap();
+        fs::write(&colt, format!("# mine\n{text}")).unwrap();
+        assert!(same_as_built(&settings, "doomify/weapons/colt.toml"));
+        fs::write(&colt, text.replace("name = \"", "name = \"My ")).unwrap();
+        assert!(!same_as_built(&settings, "doomify/weapons/colt.toml"));
+        let mut steps = journal::Steps::open(&art, false);
+        place_settings(&settings, &mut steps).unwrap();
+        assert!(fs::read_to_string(&colt).unwrap().contains("My "));
+        // with --reinstall (as with a newer install-nacht's settings) they are replaced
+        let mut steps = journal::Steps::open(&art, true);
+        place_settings(&settings, &mut steps).unwrap();
+        assert!(!fs::read_to_string(&colt).unwrap().contains("My "));
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

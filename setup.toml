@@ -1,7 +1,7 @@
 # Nacht des Platzhalters: what publish.py sets up with `tdl setup` once nacht.pk3 is built. A
 # loadout of nacht's own, beside the built pk3s, which tdl doesn't open every time; in it, a profile
-# that plays the map with Doom's weapons standing in for World at War's (until doomify.py has run,
-# which sets up Nacht des Schreckens with setup-waw.toml). Paths are relative to this folder.
+# that plays the map with Doom's weapons standing in for World at War's (until install-nacht has
+# built them, setting up Nacht des Schreckens beside it). Paths are relative to this folder.
 loadout = "published/artifacts/loadout"
 remember_loadout = false
 

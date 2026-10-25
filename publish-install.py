@@ -1,20 +1,21 @@
 #!/usr/bin/env python3
-"""Publish Nacht des Schreckens, then install it with the nacht-install just published.
+"""Publish Nacht des Schreckens, then install it with the install-nacht just published.
 
-usage: python3 publish-install.py [--accept] [--no-build | --source] [nacht-install options]
+usage: python3 publish-install.py [--accept] [--no-build | --source] [install-nacht options]
 
 First it says, under a red warning, exactly what it will do, and asks once: "Are you sure? [y/n]".
 The answer can carry any of its flags after the y (`y --mode user --desktop-shortcut`), which win
 over the same flags on the command line; --accept goes ahead without asking, with what the command
 line says and the defaults for the rest (in place, no shortcuts). Then it builds the release with
-publish.py (the pk3s, and nacht-install for Windows and as an AppImage, into published/releases/),
-or with --source the pk3s and nacht-install for this machine only (cargo build --release), or with
---no-build nothing at all, having rebuilt the workspace's tdl and doomify-waw releases first if
-their sources are newer; and runs the nacht-install in published/releases/, which installs the
-pk3s, tdl, Blender and the song where --mode says, sets up the install's loadout and runs
-doomify.py if World at War is running. --mode, --dir, --no-tdl, --no-uzdoom, --no-freedoom,
+publish.py (the pk3s, and install-nacht for Windows and as an AppImage, into published/releases/;
+install-nacht is built with doomify, from the workspace's ../doomify-waw and ../hell-hound), or with
+--source the pk3s and install-nacht for this machine only (cargo build --release), or with
+--no-build nothing at all, having rebuilt the workspace's tdl releases first if their sources are
+newer; and runs the install-nacht in published/releases/, which installs the pk3s, tdl, Blender and
+the song where --mode says, puts doomify's settings in its artifacts' doomify/, builds the weapons
+with doomify (World at War running, or everything in its cache) and sets up the install's loadout. --mode, --dir, --no-tdl, --no-uzdoom, --no-freedoom,
 --no-blender, --no-doomify, --no-song, --waw, --blender, --desktop-shortcut and --menu-entry go
-to nacht-install (see its --help).
+to install-nacht (see its --help).
 
 It speaks in a voice from ../installation-groans (Toiling Through Hell, or --computer-speak), and
 everything it and what it runs did is in published/artifacts/publish-install.log.
@@ -35,12 +36,13 @@ JOURNAL = os.path.join(HERE, "published", "artifacts", "publish-install.log")
 WINDOWS = platform.system() == "Windows"
 EXE = ".exe" if WINDOWS else ""
 NAME = "nacht-des-schreckens"
-# The workspace's tools nacht-install takes from their releases, the checkouts each is built from,
+# The workspace's tools install-nacht takes from their releases, the checkouts each is built from,
 # and the release files it needs
 TOOLS = {
-    "tdl": (["tdl"], ["tdl", "tdl-install"]),
-    "doomify-waw": (["doomify-waw", "hell-hound"], ["doomify-waw"]),
+    "tdl": (["tdl"], ["tdl", "install-tdl"]),
 }
+# What install-nacht is built from besides this checkout: doomify and hell-hound, which it links
+BUILT_WITH = ["horde-hammer", "doomify-waw", "hell-hound"]
 GROANS_GITHUB = "https://raw.githubusercontent.com/error-error-fruit-user/installation-groans/main/"
 
 
@@ -130,22 +132,21 @@ def ask(flags, args, plan):
 def plan(args):
     """What saying yes does, step by step."""
     pk3s = ("pack nacht/ into published/releases/nacht.pk3 (with LICENSE-weather) and "
-            "../horde-hammer into horde-hammer.pk3 (in its published/releases/, and a copy here), "
-            "and nacht-waw/ into published/artifacts/nacht-waw.pk3 if doomify.py has built it")
+            "../horde-hammer into horde-hammer.pk3 (in its published/releases/, and a copy here)")
     lines = ["Saying yes will:"]
     if args.no_build:
         lines.append("  - build nothing, and install what published/releases/ has now")
     else:
-        lines.append("  - rebuild the workspace's releases of tdl and doomify-waw (their publish.py) if "
-                     "their sources are newer than them, for nacht-install to take")
+        lines.append("  - rebuild the workspace's releases of tdl (its publish.py) if its sources are "
+                     "newer than them, for install-nacht to take")
         lines.append(f"  - {pk3s}, replacing what is there")
         if args.source:
-            lines.append(f"  - build nacht-install{EXE} for this machine (cargo build --release in "
+            lines.append(f"  - build install-nacht{EXE} for this machine (cargo build --release in "
                          "installer/) and copy it into published/releases/")
         else:
-            lines.append("  - build nacht-install into published/releases/: as an AppImage (needs "
+            lines.append("  - build install-nacht, with doomify in it, into published/releases/: as an AppImage (needs "
                          "mksquashfs) and cross-built for Windows (Rust's x86_64-pc-windows-gnu target)")
-    lines.append("  - run nacht-install from published/releases/, which:")
+    lines.append("  - run install-nacht from published/releases/, which:")
     user = f"%LOCALAPPDATA%\\Programs\\{NAME}" if WINDOWS else f"~/.local/opt/{NAME}"
     lines.append({
         "in-place": "    - installs in published/releases/ itself (or --dir)",
@@ -155,11 +156,10 @@ def plan(args):
            "published/artifacts/" if args.mode == "in-place" else "artifacts/ there")
     lines.append("    - puts horde-hammer.pk3 and nacht.pk3, the payload, in its wads/, and "
                  f"everything else, its artifacts, in {art}: tdl, Blender, the song, the loadout, "
-                 f"its log, and doomify.py with its settings in {NAME}/, with a doomify-waw: the "
-                 "workspace's (../doomify-waw/published/releases/) or else downloaded from "
-                 "doomify-waw's latest GitHub release")
+                 "its log, doomify's settings in doomify/ (yours to rewrite, kept until a newer "
+                 "install-nacht brings its own) and the weapons built from them")
     if not args.no_tdl:
-        tdl = ("    - runs tdl-install (the workspace's ../tdl/published/releases/, or else "
+        tdl = ("    - runs install-tdl (the workspace's ../tdl/published/releases/, or else "
                "downloaded from tdl's latest GitHub release), which puts tdl in the artifacts")
         if args.mode != "in-place":
             tdl += " with the tdl command on the PATH"
@@ -183,9 +183,9 @@ def plan(args):
         lines.append("    - pulls and renders every weapon again from World at War (--rerender), though "
                      "they are built and in the cache: an hour or more")
     if not args.no_doomify:
-        lines.append("    - if World at War is running with Der Riese loaded, runs doomify.py, which "
-                     "rebuilds the weapons from your game into nacht-waw.pk3 (about an hour the first "
-                     "time) and may install git and Rust to build doomify-waw")
+        lines.append("    - rebuilds the weapons from your game with doomify into wads/nacht-waw.pk3, if "
+                     "World at War is running with Der Riese loaded or everything is in doomify's "
+                     "cache (about an hour the first time)")
     for flag, where_to in (("desktop_shortcut", "a shortcut on your desktop"),
                            ("menu_entry", "an entry in your app menu")):
         if getattr(args, flag):
@@ -203,8 +203,8 @@ def plan(args):
 
 
 def refresh_tools():
-    """Rebuilds the workspace's releases of tdl and doomify-waw (their publish.py) when their
-    sources are newer than them, so nacht-install never takes an old one from the workspace."""
+    """Rebuilds the workspace's releases of tdl (its publish.py) when its sources are newer than
+    them, so install-nacht never takes an old one from the workspace."""
     workspace = os.path.dirname(HERE)
     suffix = ".exe" if WINDOWS else ".AppImage"
     for project, (checkouts, programs) in TOOLS.items():
@@ -224,7 +224,7 @@ def build(args):
         return
     groans.section("build")
     refresh_tools()
-    if not args.reinstall and not args.source and groans.up_to_date([os.path.join(RELEASES, name) for name in ("nacht.pk3", "horde-hammer.pk3", "nacht-install" + (".exe" if WINDOWS else ".AppImage"))], [HERE, os.path.join(os.path.dirname(HERE), "horde-hammer")]):
+    if not args.reinstall and not args.source and groans.up_to_date([os.path.join(RELEASES, name) for name in ("nacht.pk3", "horde-hammer.pk3", "install-nacht" + (".exe" if WINDOWS else ".AppImage"))], [HERE] + [os.path.join(os.path.dirname(HERE), name) for name in BUILT_WITH]):
         groans.say("skip", "The release is newer than its sources: nothing to build "
                    "(--reinstall builds it again)", what="Nacht des Schreckens's release", place=RELEASES)
         return
@@ -232,26 +232,26 @@ def build(args):
     if args.source:
         groans.run([sys.executable, "publish.py", "--no-appimages"], cwd=HERE, voiced=True)
         groans.run(["cargo", "build", "--release"], cwd=os.path.join(HERE, "installer"))
-        shutil.copy2(os.path.join(HERE, "installer", "target", "release", "nacht-install" + EXE),
-                     os.path.join(RELEASES, "nacht-install" + EXE))
+        shutil.copy2(os.path.join(HERE, "installer", "target", "release", "install-nacht" + EXE),
+                     os.path.join(RELEASES, "install-nacht" + EXE))
         groans.note(f"copied the release build into {RELEASES}")
         return
     groans.run([sys.executable, "publish.py"], cwd=HERE, voiced=True)
-    # 🧹 a plain nacht-install left by --source would be taken over the AppImage just built
-    leftover = os.path.join(RELEASES, "nacht-install")
+    # 🧹 a plain install-nacht left by --source would be taken over the AppImage just built
+    leftover = os.path.join(RELEASES, "install-nacht")
     if not WINDOWS and os.path.isfile(leftover):
         os.remove(leftover)
 
 
 def installer():
-    """The nacht-install in published/releases/: the .exe on Windows, else the plain one --source
+    """The install-nacht in published/releases/: the .exe on Windows, else the plain one --source
     built or the AppImage."""
-    names = ["nacht-install.exe"] if WINDOWS else ["nacht-install", "nacht-install.AppImage"]
+    names = ["install-nacht.exe"] if WINDOWS else ["install-nacht", "install-nacht.AppImage"]
     for name in names:
         path = os.path.join(RELEASES, name)
         if os.path.isfile(path):
             return path
-    sys.exit("There is no nacht-install in published/releases/: build it (leave out --no-build).")
+    sys.exit("There is no install-nacht in published/releases/: build it (leave out --no-build).")
 
 
 def parser():
@@ -262,8 +262,8 @@ def parser():
     build_how.add_argument("--no-build", action="store_true",
                            help="install what published/releases/ has now, building nothing")
     build_how.add_argument("--source", action="store_true",
-                           help="build the pk3s and nacht-install for this machine only")
-    passed = flags.add_argument_group("passed to nacht-install")
+                           help="build the pk3s and install-nacht for this machine only")
+    passed = flags.add_argument_group("passed to install-nacht")
     passed.add_argument("--mode", choices=["in-place", "user"], default="in-place")
     passed.add_argument("--dir")
     for flag in ("--no-tdl", "--no-uzdoom", "--no-freedoom", "--no-blender", "--no-doomify",
@@ -276,7 +276,7 @@ def parser():
                             "one left off")
     flags.add_argument("--computer-speak", action="store_true",
                        help="say what it does plainly and formally, rather than as a descent through "
-                            "hell (and have nacht-install do the same)")
+                            "hell (and have install-nacht do the same)")
     return flags
 
 

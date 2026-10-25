@@ -1,6 +1,6 @@
 // Nacht's sounds. At the end, Horde Hammer's sounds (hh/...) are pointed at nacht's. The zombies'
-// and the weapons' sounds are World at War's, rebuilt from the player's own game by doomify.py
-// into ../nacht-waw (its SNDINFO.txt).
+// and the weapons' sounds are World at War's, rebuilt from the player's own game by install-nacht
+// with doomify into nacht-waw (its SNDINFO.txt).
 
 game/nuke     sounds/interactions/NUKE
 game/doublepoints   sounds/interactions/X2

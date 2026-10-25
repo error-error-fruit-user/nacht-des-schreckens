@@ -1,5 +1,5 @@
 // The perk machines, drawn for nacht by Alexis Dutcher. Their drinks are World at War's bottles,
-// rebuilt from the player's own game by doomify.py (the generated Nacht_...Drink classes in
+// rebuilt from the player's own game by install-nacht with doomify (the generated Nacht_...Drink classes in
 // nacht-waw), found by name when one is bought, so nacht loads without them: then (Nacht des
 // Platzhalters) the library's drinks are sold. The perks themselves are Horde Hammer's, their HUD
 // icons in graphics/hh/ under the library's names.

@@ -17,11 +17,11 @@ skill Normal {
 }
 
 // Horde Hammer adds its own event handlers and editor numbers (27000-27099); the generated
-// ../nacht-waw adds the weapons' (the wall drawings, 1050-1070) and the player class, Nacht_Player
+// nacht-waw adds the weapons' (the wall drawings, 1050-1070) and the player class, Nacht_Player
 // (World at War's start items). Without it the marine is Doom's (Nacht des Platzhalters).
 GameInfo {
     StatusBarClass = "HH_Hud"
-    AddEventHandlers = "Nacht_IntroHandler", "Nacht_WorldAtWar"  // the intro's title (the intro itself is ACS, LOADACS.txt); the note that doomify.py hasn't been run
+    AddEventHandlers = "Nacht_IntroHandler", "Nacht_WorldAtWar"  // the intro's title (the intro itself is ACS, LOADACS.txt); the note that nacht-waw isn't loaded
 
     // the theme (tools/theme.py draws its pictures, TEXTCOLO.txt has its colours)
     TitlePage = "TITLEPIC"

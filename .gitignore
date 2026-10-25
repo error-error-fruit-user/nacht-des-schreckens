@@ -6,7 +6,7 @@ map01.wad.*
 __pycache__/
 /CLAUDE.md
 
-# Built by doomify.py from the player's own World at War: never shared
+# Once built from the player's own World at War (install-nacht builds nacht-waw in its artifacts now): never shared
 /nacht-waw/
 /nacht-waw.pk3
 /installer/target

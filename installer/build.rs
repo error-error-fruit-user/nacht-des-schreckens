@@ -1,21 +1,22 @@
-//! Embeds `../doomify.py` and every `../doomify/**/*.toml` into the installer, each as a named const
-//! (a `Toml` made by `const_toml!` for a TOML, a `&str` from `include_str!` for the script) (`DOOMIFY_PY`, `DOOMIFY_DOOMIFY_TOML`, `DOOMIFY_WEAPONS_COLT_TOML`, ...), plus the
-//! tables `FILES`, `WEAPONS` and `SOUNDS` over them, so the settings it installs are the ones in the repository when it is built: edit them, then
-//! rebuild (`cargo build --release`) to customize. (doomify-waw and the other files in `doomify/`
-//! are not embedded.)
+//! Builds every `../doomify/**/*.toml` into the installer as a const of the doomify type it is
+//! read into (`doomify.toml` a `Config`, `weapons/*.toml` a `Weapon`, `sounds/*.toml` a
+//! `SoundSet`): each is read with serde here, a TOML that doesn't read or check failing the build,
+//! and written into `OUT_DIR/const_toml/` as the Rust that builds it, which `const_toml!` puts in a
+//! named const (`DOOMIFY_WEAPONS_COLT_TOML`). Then the tables over them: `FILES` (each file's
+//! path and text, which the install puts in its artifacts), `WEAPONS`, `SOUNDS` and `CONFIG`. So
+//! the settings it installs are the repository's when it is built: edit them, then rebuild.
 //!
-//! It also brings installation-groans' files (`groans.rs`, the journal it is built with, `groans.py`
-//! for doomify.py, and the voices) into `OUT_DIR/groans/`: from nacht's installation-groans
-//! submodule, else the workspace's checkout beside nacht, else GitHub.
+//! It also brings installation-groans' files (`groans.rs`, the journal it is built with, and the
+//! voices) into `OUT_DIR/groans/`: from nacht's installation-groans submodule, else the
+//! workspace's checkout beside nacht, else GitHub.
 
 use std::{
     env, fs, io,
     path::{Path, PathBuf},
 };
 
-const GROANS: [&str; 4] = [
+const GROANS: [&str; 3] = [
     "groans.rs",
-    "groans.py",
     "toiling-through-hell.toml",
     "computer-speak.toml",
 ];
@@ -100,21 +101,17 @@ fn main() -> io::Result<()> {
     tomls(&folder, &mut files)?;
     files.sort();
 
-    // One named const per file (`doomify/weapons/colt.toml` is `DOOMIFY_WEAPONS_COLT_TOML`), then
-    // tables over them: every file to install, and the weapons' and the sounds' settings alone
-    let script = root.join("doomify.py");
-    let mut entries = vec![("doomify.py".to_string(), script.clone())];
+    // One named const per file (`doomify/weapons/colt.toml` is `DOOMIFY_WEAPONS_COLT_TOML`), of the
+    // type its place says, then the tables over them
+    let mut code = String::new();
+    let mut names = Vec::new();
+    let (mut all, mut weapons, mut sounds, mut config) = (vec![], vec![], vec![], None);
     for path in &files {
         let inside = path
             .strip_prefix(&root)
             .unwrap()
             .to_string_lossy()
             .replace('\\', "/");
-        entries.push((inside, path.clone()));
-    }
-    let mut code = String::new();
-    let mut names = Vec::new();
-    for (inside, _) in &entries {
         let name: String = inside
             .chars()
             .map(|c| {
@@ -129,47 +126,65 @@ fn main() -> io::Result<()> {
             !names.contains(&name),
             "{inside} makes the const name {name} twice"
         );
-        if inside.ends_with(".toml") {
-            // the macro and `Toml` are main.rs's; the path is from the repository's root
-            code.push_str(&format!(
-                "/// `{inside}`, as the repository had it when this was built.\npub const {name}: Toml = const_toml![{inside:?}];\n"
-            ));
+        let id = path.file_stem().unwrap().to_string_lossy().into_owned();
+        let built = |problem: anyhow::Error| io::Error::other(format!("{problem:#}"));
+        let kind = if inside.starts_with("doomify/weapons/") {
+            // checked as doomify checks a weapon, so a bad one fails here
+            doomify::weapon::Weapon::load(path).map_err(built)?;
+            doomify::const_toml::write::<doomify::types::Weapon>(path, &inside).map_err(built)?;
+            weapons.push((id, name.clone()));
+            "Weapon"
+        } else if inside.starts_with("doomify/sounds/") {
+            doomify::sounds::SoundSet::load(path).map_err(built)?;
+            doomify::const_toml::write::<doomify::types::SoundSet>(path, &inside).map_err(built)?;
+            sounds.push((id, name.clone()));
+            "SoundSet"
+        } else if inside == "doomify/doomify.toml" {
+            doomify::const_toml::write::<doomify::types::Config>(path, &inside).map_err(built)?;
+            config = Some(name.clone());
+            "Config"
         } else {
-            code.push_str(&format!(
-                "/// `{inside}`, as the repository had it when this was built.\npub const {name}: &str = include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/../\", {inside:?}));\n"
-            ));
-        }
+            println!("cargo:warning={inside} is no doomify TOML this knows: left out");
+            continue;
+        };
+        code.push_str(&format!(
+            "/// `{inside}`, as the repository had it when this was built.\npub const {name}: {kind} = const_toml![{inside:?}];\n"
+        ));
+        all.push(inside);
         names.push(name);
     }
-    let table = |title: &str, doc: &str, keep: &dyn Fn(&str) -> bool| {
-        let mut table = format!("/// {doc}\npub const {title}: &[(&str, &str)] = &[\n");
-        for ((inside, _), name) in entries.iter().zip(&names) {
-            if keep(inside) {
-                let source = if inside.ends_with(".toml") {
-                    format!("{name}.source")
-                } else {
-                    name.clone()
-                };
-                table.push_str(&format!("    ({inside:?}, {source}),\n"));
-            }
+    let config = config.ok_or_else(|| io::Error::other("doomify/doomify.toml is missing"))?;
+    code.push_str("/// Every TOML the install puts in its artifacts: where (from the repository's root), and its text.\npub const FILES: &[(&str, &str)] = &[\n");
+    for inside in &all {
+        code.push_str(&format!(
+            "    ({inside:?}, include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/../\", {inside:?}))),\n"
+        ));
+    }
+    code.push_str("];\n");
+    for (title, doc, kind, entries) in [
+        (
+            "WEAPONS",
+            "The weapons, `doomify/weapons/*.toml`, by id.",
+            "Weapon",
+            &weapons,
+        ),
+        (
+            "SOUNDS",
+            "The sound sets, `doomify/sounds/*.toml`, by id.",
+            "SoundSet",
+            &sounds,
+        ),
+    ] {
+        code.push_str(&format!(
+            "/// {doc}\npub const {title}: &[(&str, {kind})] = &[\n"
+        ));
+        for (id, name) in entries {
+            code.push_str(&format!("    ({id:?}, {name}),\n"));
         }
-        table.push_str("];\n");
-        table
-    };
-    code.push_str(&table(
-        "FILES",
-        "Every file to install: where it goes in the install, and what is in it.",
-        &|_| true,
-    ));
-    code.push_str(&table(
-        "WEAPONS",
-        "The weapons' settings, `doomify/weapons/*.toml`.",
-        &|i| i.starts_with("doomify/weapons/"),
-    ));
-    code.push_str(&table(
-        "SOUNDS",
-        "The sound sets' settings, `doomify/sounds/*.toml`.",
-        &|i| i.starts_with("doomify/sounds/"),
+        code.push_str("];\n");
+    }
+    code.push_str(&format!(
+        "/// doomify's settings for nacht, `doomify/doomify.toml`.\npub const CONFIG: Config = {config};\n"
     ));
     fs::write(
         PathBuf::from(env::var("OUT_DIR").unwrap()).join("embedded.rs"),
@@ -177,7 +192,6 @@ fn main() -> io::Result<()> {
     )?;
 
     groans(&root)?;
-    println!("cargo:rerun-if-changed={}", script.display());
     println!("cargo:rerun-if-changed={}", folder.display());
     for path in &files {
         println!("cargo:rerun-if-changed={}", path.display());

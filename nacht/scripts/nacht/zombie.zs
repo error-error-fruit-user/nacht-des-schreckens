@@ -1,5 +1,5 @@
 // World at War's zombie, on Horde Hammer's (which counts headshots). Its sounds are Der Riese's,
-// rebuilt by doomify.py (zombie/...): it groans, hisses, dies, comes apart under explosions, burns
+// rebuilt by install-nacht with doomify (zombie/...): it groans, hisses, dies, comes apart under explosions, burns
 // and is electrocuted by the Wunderwaffe.
 
 class Nacht_Zombie : HH_Zombie {
