@@ -4,7 +4,7 @@
 usage: python3 publish-install.py [--accept] [--no-build | --source] [install-nacht options]
 
 First it says, under a red warning, exactly what it will do, and asks once: "Are you sure? [y/n]".
-The answer can carry any of its flags after the y (`y --mode user --desktop-shortcut`), which win
+The answer can carry any of its flags after the y (`y --user-wide --desktop-shortcut`), which win
 over the same flags on the command line; --accept goes ahead without asking, with what the command
 line says and the defaults for the rest (in place, no shortcuts). Then it builds the release with
 publish.py (the pk3s, and install-nacht for Windows and as an AppImage, into published/releases/;
@@ -13,8 +13,9 @@ install-nacht is built with doomify, from the workspace's ../doomify-waw and ../
 releases first if their sources are newer (--no-build too); and runs install-nacht with
 `cargo run --release` in installer/ (built again whenever it, doomify or hell-hound changed, so it
 is never an older one, --no-build or not) on the release in published/releases/ (`--from`), which
-installs the pk3s, tdl, Blender and the songs where --mode says, puts doomify's settings in its artifacts' doomify/, builds the weapons
-with doomify (World at War running, or everything in its cache) and sets up the install's loadout. --mode, --dir, --no-tdl, --no-uzdoom, --no-freedoom,
+installs the pk3s, tdl, Blender and the songs where --locally or --user-wide says (one of them is
+needed: without it, nothing is done), puts doomify's settings in its artifacts' doomify/, builds the weapons
+with doomify (World at War running, or everything in its cache) and sets up the install's loadout. --locally, --user-wide, --command, --dir, --no-tdl, --no-uzdoom, --no-freedoom,
 --no-blender, --no-doomify, --no-song, --waw, --blender, --desktop-shortcut and --menu-entry go
 to install-nacht (see its --help).
 
@@ -129,8 +130,20 @@ def ask(flags, args, plan):
     return args
 
 
+def mode(args):
+    """Where to install, as install-nacht's old modes: "in-place" (--locally), "user"
+    (--user-wide), or None until one is given."""
+    return "in-place" if args.locally else "user" if args.user_wide else None
+
+
 def plan(args):
-    """What saying yes does, step by step."""
+    """What saying yes does, step by step; until it is told where, that it must be."""
+    if mode(args) is None:
+        user = f"%LOCALAPPDATA%\\Programs\\{NAME}" if WINDOWS else f"~/.local/opt/{NAME}"
+        return ["Say where to install Nacht des Schreckens, here after the y or on the command line:",
+                "  --locally    in place, in published/releases/",
+                f"  --user-wide  for you only, in {user}",
+                "One of them is needed: without it, nothing is done."]
     pk3s = ("pack nacht/ into published/releases/nacht.pk3 (with LICENSE-weather) and "
             "../horde-hammer into horde-hammer.pk3 (in its published/releases/, and a copy here)")
     lines = ["Saying yes will:"]
@@ -149,9 +162,9 @@ def plan(args):
     lines.append({
         "in-place": "    - installs in published/releases/ itself (or --dir)",
         "user": f"    - installs in {user} (or --dir)",
-    }[args.mode])
+    }[mode(args)])
     art = ("artifacts/ in --dir" if args.dir else
-           "published/artifacts/" if args.mode == "in-place" else "artifacts/ there")
+           "published/artifacts/" if mode(args) == "in-place" else "artifacts/ there")
     lines.append("    - puts horde-hammer.pk3 and nacht.pk3, the payload, in its wads/, and "
                  f"everything else, its artifacts, in {art}: tdl, Blender, the song, the loadout, "
                  "its log, doomify's settings in doomify/ (yours to rewrite, kept until a newer "
@@ -159,7 +172,7 @@ def plan(args):
     if not args.no_tdl:
         tdl = ("    - runs install-tdl (the workspace's ../tdl/published/releases/, or else "
                "downloaded from tdl's latest GitHub release), which puts tdl in the artifacts")
-        if args.mode != "in-place":
+        if mode(args) != "in-place":
             tdl += " with the tdl command on the PATH"
         downloads = [name for name, left_out in (("UZDoom 5.0.3", args.no_uzdoom),
                                                  ("Freedoom 0.13.0", args.no_freedoom)) if not left_out]
@@ -191,13 +204,15 @@ def plan(args):
         if getattr(args, flag):
             lines.append(f"    - makes {where_to} for Nacht des Schreckens (tdl on the install's "
                          "loadout), with the system's lock icon")
+    if args.command:
+        lines.append("    - makes nacht a command in your terminal, which opens tdl on the install's loadout")
     lines.append("    - sets up the install's loadout and opens tdl on it")
     lines.append("")
     lines.append("To change that, here or after the y: --no-build installs what is published already, "
                  "--source builds only for this machine, --no-tdl, --no-uzdoom, --no-freedoom, "
                  "--no-blender, --no-doomify and --no-song leave those out, --waw DIR says where World "
-                 "at War is, --blender PATH uses your Blender, --mode in-place|user and --dir "
-                 "say where, --desktop-shortcut and --menu-entry make shortcuts, --reinstall does it all again, --rerender renders every weapon again, and --computer-speak "
+                 "at War is, --blender PATH uses your Blender, --locally or --user-wide and --dir "
+                 "say where, --desktop-shortcut and --menu-entry make shortcuts, --command makes the nacht command, --reinstall does it all again, --rerender renders every weapon again, and --computer-speak "
                  "speaks plainly.")
     return lines
 
@@ -256,10 +271,14 @@ def parser():
     build_how.add_argument("--source", action="store_true",
                            help="publish the pk3s only, without install-nacht's AppImage and .exe")
     passed = flags.add_argument_group("passed to install-nacht")
-    passed.add_argument("--mode", choices=["in-place", "user"], default="in-place")
+    where = passed.add_mutually_exclusive_group()
+    where.add_argument("--locally", action="store_true",
+                       help="install in place, in published/releases/ (this or --user-wide is needed)")
+    where.add_argument("--user-wide", action="store_true",
+                       help="install for you only (this or --locally is needed)")
     passed.add_argument("--dir")
     for flag in ("--no-tdl", "--no-uzdoom", "--no-freedoom", "--no-blender", "--no-doomify",
-                 "--no-song", "--rerender", "--desktop-shortcut", "--menu-entry"):
+                 "--no-song", "--rerender", "--desktop-shortcut", "--menu-entry", "--command"):
         passed.add_argument(flag, action="store_true")
     passed.add_argument("--blender", metavar="PATH")
     passed.add_argument("--waw", metavar="DIR")
@@ -282,11 +301,14 @@ def main():
         sys.exit("Don't run this with sudo: it builds and installs for you (or in place), and root "
                  "would leave files in published/ and an install that only root can change.")
     args = ask(flags, args, plan)
+    if mode(args) is None:
+        groans.note("no --locally or --user-wide: nothing was done")
+        sys.exit("Nothing was done: say where to install it, with --locally or --user-wide.")
     check_owner([os.path.join(HERE, "published"),
                  os.path.join(os.path.dirname(HERE), "horde-hammer", "published")])
     build(args)
     groans.section("install")
-    command = installer() + ["--accept", "--mode", args.mode]
+    command = installer() + ["--accept", "--locally" if mode(args) == "in-place" else "--user-wide"]
     for flag, value in (("--dir", args.dir), ("--blender", args.blender), ("--waw", args.waw)):
         if value:
             command += [flag, value]
@@ -298,7 +320,8 @@ def main():
                                       ("--reinstall", args.reinstall),
                                       ("--rerender", args.rerender),
                                       ("--desktop-shortcut", args.desktop_shortcut),
-                                      ("--menu-entry", args.menu_entry)) if on]
+                                      ("--menu-entry", args.menu_entry),
+                                      ("--command", args.command)) if on]
     groans.run(command, cwd=HERE, voiced=True)
 
 

@@ -20,7 +20,8 @@
 //! pinned hash, since the latest release isn't known when this is built; they come over HTTPS from
 //! the project's own releases.
 //!
-//! `--mode` says where to install: in place (the default) or for you, like `install-tdl`; nothing is
+//! `--locally` (in place) or `--user-wide` (for you, like `install-tdl --mode user`) says where to
+//! install, and one of them is needed: without either, nothing is done. Nothing is
 //! installed for everyone, so it never needs root or an administrator, and it won't run as root. The payload goes in that folder: the pk3s, in `wads/` (a pool tdl offers).
 //! Everything else is an artifact, in `artifacts/` there (nacht's `published/artifacts/` when this
 //! runs in place from its `published/releases/`, or `--artifacts`): tdl with UZDoom and Freedoom 2,
@@ -53,7 +54,7 @@ use std::{
     process::{Command, ExitCode},
 };
 
-use clap::{CommandFactory, Parser, ValueEnum};
+use clap::{CommandFactory, Parser};
 use sha2::{Digest, Sha256};
 
 /// The pk3s nacht is played with, in the order they load.
@@ -165,14 +166,22 @@ const BLENDER_WINDOWS: Download = Download {
 #[derive(Parser)]
 #[command(version, about)]
 struct Cli {
-    /// Goes ahead without asking, with the defaults for what isn't given (in place, no shortcuts)
+    /// Goes ahead without asking, with the defaults for what isn't given (no shortcuts); where
+    /// to install is still needed (--locally or --user-wide)
     #[arg(long)]
     accept: bool,
-    /// Where to install: in place (next to this program), or for you.
-    #[arg(long, value_enum, default_value = "in-place")]
-    mode: Mode,
-    /// The folder to install into. Defaults to the one this program is in (in place) or the
-    /// mode's own folder.
+    /// Installs in place, next to this program (or its --from folder). This or --user-wide is needed
+    #[arg(long, conflicts_with = "user_wide")]
+    locally: bool,
+    /// Installs for you only, in your own folder (~/.local/opt, or %LOCALAPPDATA%\Programs on
+    /// Windows), tdl on your PATH. This or --locally is needed
+    #[arg(long)]
+    user_wide: bool,
+    /// Makes `nacht` a command anywhere in the terminal, opening tdl on the install's loadout
+    #[arg(long)]
+    command: bool,
+    /// The folder to install into. Defaults to the one this program is in (--locally) or your
+    /// own (--user-wide).
     #[arg(long, value_name = "DIR")]
     dir: Option<PathBuf>,
     /// Leaves tdl, UZDoom and Freedoom 2 out (`install-tdl` isn't run).
@@ -250,7 +259,7 @@ const TOILING_THROUGH_HELL: &str = const_groan!["toiling-through-hell.toml"];
 const COMPUTER_SPEAK: &str = const_groan!["computer-speak.toml"];
 
 /// Where nacht lives.
-#[derive(Clone, Copy, PartialEq, Eq, Debug, ValueEnum)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Mode {
     /// Next to this program.
     InPlace,
@@ -323,18 +332,46 @@ fn pull_for_blender(args: &[OsString]) -> ExitCode {
     }
 }
 
-/// Where nacht goes and where its artifacts go, as `cli` says.
-fn places(cli: &Cli, here: &Path) -> Outcome<(PathBuf, PathBuf)> {
-    let dir = match &cli.dir {
-        Some(dir) => std::path::absolute(dir).unwrap_or_else(|_| dir.clone()),
-        None => install_dir(cli.mode, here)?,
-    };
-    let art = artifacts_dir(cli.artifacts.as_deref(), &dir, here);
-    Ok((dir, art))
+/// Where the user said to install: `--locally` or `--user-wide`, or neither yet.
+fn mode(cli: &Cli) -> Option<Mode> {
+    if cli.locally {
+        Some(Mode::InPlace)
+    } else if cli.user_wide {
+        Some(Mode::User)
+    } else {
+        None
+    }
 }
 
-/// What saying yes does, step by step: the warning before the one question.
-fn plan(cli: &Cli, dir: &Path, art: &Path) -> Vec<String> {
+/// Where nacht goes and where its artifacts go, as `cli` says; `None` until it says where.
+fn places(cli: &Cli, here: &Path) -> Outcome<Option<(PathBuf, PathBuf)>> {
+    let Some(mode) = mode(cli) else {
+        return Ok(None);
+    };
+    let dir = match &cli.dir {
+        Some(dir) => std::path::absolute(dir).unwrap_or_else(|_| dir.clone()),
+        None => install_dir(mode, here)?,
+    };
+    let art = artifacts_dir(cli.artifacts.as_deref(), &dir, here);
+    Ok(Some((dir, art)))
+}
+
+/// What saying yes does, step by step: the warning before the one question. Until it is told
+/// where (`places`), it says that it must be.
+fn plan(cli: &Cli, here: &Path, places: Option<&(PathBuf, PathBuf)>) -> Vec<String> {
+    let Some((dir, art)) = places else {
+        let user = install_dir(Mode::User, here)
+            .map(|dir| dir.display().to_string())
+            .unwrap_or_else(|problem| problem);
+        return vec![
+            "Say where to install Nacht des Schreckens, here after the y or on the command line:"
+                .to_string(),
+            format!("  --locally    in place, in {}", here.display()),
+            format!("  --user-wide  for you only, in {user}"),
+            "One of them is needed: without it, nothing is done.".to_string(),
+        ];
+    };
+    let mode = mode(cli);
     let mut lines = vec![
         "Saying yes will:".to_string(),
         format!(
@@ -354,7 +391,7 @@ fn plan(cli: &Cli, dir: &Path, art: &Path) -> Vec<String> {
             .collect();
         lines.push(format!(
             "  - run install-tdl, which puts tdl in the artifacts{}{}",
-            if cli.mode == Mode::InPlace {
+            if mode == Some(Mode::InPlace) {
                 ""
             } else {
                 " with the tdl command on the PATH"
@@ -405,6 +442,12 @@ fn plan(cli: &Cli, dir: &Path, art: &Path) -> Vec<String> {
             "  - make an entry in your app menu that opens tdl on the install's loadout".into(),
         );
     }
+    if cli.command {
+        lines.push(format!(
+            "  - make nacht a command in your terminal, which opens tdl on the install's loadout ({})",
+            command_place()
+        ));
+    }
     lines.push(format!(
         "  - set up the install's loadout{}",
         if cli.no_play {
@@ -433,7 +476,7 @@ fn plan(cli: &Cli, dir: &Path, art: &Path) -> Vec<String> {
     }
     lines.push(String::new());
     lines.push(
-        "To change that, here or after the y: --mode in-place|user, --dir and --artifacts say where, --no-tdl, --no-uzdoom, --no-freedoom, --no-blender, --no-song, --no-doomify and --no-play leave those out, --reinstall does everything again, --rerender renders every weapon again, --waw DIR and --blender PATH say where World at War and Blender are, --desktop-shortcut and --menu-entry make shortcuts, and --computer-speak speaks plainly."
+        "To change that, here or after the y: --locally or --user-wide, --dir and --artifacts say where, --no-tdl, --no-uzdoom, --no-freedoom, --no-blender, --no-song, --no-doomify and --no-play leave those out, --reinstall does everything again, --rerender renders every weapon again, --waw DIR and --blender PATH say where World at War and Blender are, --desktop-shortcut and --menu-entry make shortcuts, --command makes the nacht command, and --computer-speak speaks plainly."
             .into(),
     );
     lines
@@ -441,12 +484,15 @@ fn plan(cli: &Cli, dir: &Path, art: &Path) -> Vec<String> {
 
 fn run(mut cli: Cli) -> Outcome<()> {
     let here = match &cli.from {
-        Some(from) => std::path::absolute(from).unwrap_or_else(|_| from.clone()),
+        Some(from) => from
+            .canonicalize()
+            .or_else(|_| std::path::absolute(from))
+            .unwrap_or_else(|_| from.clone()),
         None => program_dir().ok_or("Couldn't tell where this program is")?,
     };
-    let (mut dir, mut art) = places(&cli, &here)?;
+    let mut chosen = places(&cli, &here)?;
     // ❓ the one question, after what saying yes does; flags given with the y win
-    journal::warning(&plan(&cli, &dir, &art));
+    journal::warning(&plan(&cli, &here, chosen.as_ref()));
     let flags: Vec<String> = Cli::command()
         .get_arguments()
         .filter_map(|argument| argument.get_long())
@@ -462,12 +508,17 @@ fn run(mut cli: Cli) -> Outcome<()> {
         Some(added) if !added.is_empty() => {
             note!("with the flags given at the question: {}", added.join(" "));
             cli = Cli::parse_from(std::env::args_os().chain(added.into_iter().map(Into::into)));
-            (dir, art) = places(&cli, &here)?;
+            chosen = places(&cli, &here)?;
         }
         Some(_) => {}
     }
+    // 📍 never a guess at where: --locally or --user-wide, from the command line or the answer
+    let (Some(mode), Some((dir, art))) = (mode(&cli), chosen) else {
+        return Err(
+            "Nothing was done: say where to install it, with --locally or --user-wide".into(),
+        );
+    };
     let cli = &cli;
-    let mode = cli.mode;
     refuse_root()?;
     for pk3 in PK3S {
         if !here.join(pk3).is_file() {
@@ -602,6 +653,16 @@ fn run(mut cli: Cli) -> Outcome<()> {
             cli.desktop_shortcut,
             cli.menu_entry,
         );
+        if cli.command {
+            match make_command(&art, &command) {
+                Ok(told) => journal::tell(
+                    "copy",
+                    &[("what", "The nacht command"), ("place", &command_place())],
+                    &told,
+                ),
+                Err(problem) => warn!("The nacht command wasn't made: {problem}"),
+            }
+        }
     }
     journal::finish("Nacht des Schreckens");
     if let Some(tdl) = tdl {
@@ -1642,6 +1703,118 @@ fn artifacts_dir(given: Option<&Path>, dir: &Path, here: &Path) -> PathBuf {
             published.join("artifacts")
         }
         _ => dir.join("artifacts"),
+    }
+}
+
+/// Where the `nacht` command is put: `~/.local/bin`, or on Windows a `bin` folder of its own in
+/// the artifacts, put on the user's PATH.
+fn command_place() -> String {
+    if cfg!(windows) {
+        "nacht.cmd, on your PATH".into()
+    } else {
+        "~/.local/bin/nacht".into()
+    }
+}
+
+/// Makes `nacht` a command anywhere in the terminal: a script in `<art>/bin` that runs `command` (what the
+/// shortcuts run: tdl on the install's loadout) with whatever it is given, linked from
+/// `~/.local/bin` (on Windows `nacht.cmd` in `<art>/bin`, which goes on the user's PATH). Returns
+/// what to tell the user.
+fn make_command(art: &Path, command: &[String]) -> Outcome<String> {
+    #[cfg(windows)]
+    {
+        let bin = art.join("bin");
+        let quoted: Vec<String> = command.iter().map(|arg| format!("\"{arg}\"")).collect();
+        write_text(
+            &bin.join("nacht.cmd"),
+            &format!(
+                "@echo off\r\nrem Nacht des Schreckens in tdl, made by install-nacht\r\n{} %*\r\n",
+                quoted.join(" ")
+            ),
+        )?;
+        let script = "$d = $env:NACHT_BIN; $p = [Environment]::GetEnvironmentVariable('Path', 'User'); \
+             if (($p -split ';') -notcontains $d) { \
+               [Environment]::SetEnvironmentVariable('Path', ($p.TrimEnd(';') + ';' + $d), 'User') }";
+        let status = Command::new("powershell")
+            .args(["-NoProfile", "-NonInteractive", "-Command", script])
+            .env("NACHT_BIN", &bin)
+            .status()
+            .map_err(|error| format!("couldn't run powershell: {error}"))?;
+        if !status.success() {
+            return Err(format!("powershell failed ({status})"));
+        }
+        Ok(format!(
+            "The nacht command: {} is on your PATH now. Open a new terminal to use it.",
+            bin.join("nacht.cmd").display()
+        ))
+    }
+    #[cfg(not(windows))]
+    {
+        let quoted: Vec<String> = command
+            .iter()
+            .map(|arg| format!("'{}'", arg.replace('\'', "'\\''")))
+            .collect();
+        // in a bin/ of its own: the artifacts' nacht/ is nacht's sprites, for doomify
+        let script = art.join("bin").join("nacht");
+        write_text(
+            &script,
+            &format!(
+                "#!/bin/sh\n# Nacht des Schreckens in tdl, made by install-nacht\nexec {} \"$@\"\n",
+                quoted.join(" ")
+            ),
+        )?;
+        make_executable(&script)?;
+        let home = std::env::var_os("HOME")
+            .map(PathBuf::from)
+            .ok_or("$HOME isn't set")?;
+        let bin = home.join(".local").join("bin");
+        let link = bin.join("nacht");
+        let problem = |error: io::Error| format!("{}: {error}", link.display());
+        fs::create_dir_all(&bin).map_err(problem)?;
+        // an old link is replaced, a real file never
+        match fs::symlink_metadata(&link) {
+            Ok(meta) if meta.file_type().is_symlink() => fs::remove_file(&link).map_err(problem)?,
+            Ok(_) => {
+                return Err(format!(
+                    "{} is a file that isn't a link, so it is left alone",
+                    link.display()
+                ));
+            }
+            Err(_) => {}
+        }
+        std::os::unix::fs::symlink(&script, &link).map_err(problem)?;
+        let mut told = format!("The nacht command: {}", link.display());
+        let on_path = std::env::var_os("PATH")
+            .is_some_and(|path| std::env::split_paths(&path).any(|entry| entry == bin));
+        if !on_path {
+            // ~/.local/bin on the PATH from the next terminal, once (install-tdl may have done it)
+            const MARK: &str = "# added by install-nacht";
+            let profile = home.join(".profile");
+            let old = fs::read_to_string(&profile).unwrap_or_default();
+            if !old.contains(MARK) && !old.contains("# added by install-tdl") {
+                let separator = if old.is_empty() || old.ends_with('\n') {
+                    ""
+                } else {
+                    "\n"
+                };
+                let line = format!(
+                    "{separator}{MARK}\nexport PATH=\"{}:$PATH\"\n",
+                    bin.display()
+                );
+                fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(&profile)
+                    .and_then(|mut file| file.write_all(line.as_bytes()))
+                    .map_err(|error| format!("{}: {error}", profile.display()))?;
+            }
+            told.push_str(&format!(
+                "\n{} isn't on this terminal's PATH yet; {} adds it, so open a new terminal (or run `. ~/.profile`).",
+                bin.display(),
+                profile.display()
+            ));
+        }
+        Ok(told)
     }
 }
 
