@@ -569,7 +569,9 @@ fn run(mut cli: Cli) -> Outcome<()> {
             steps.skip("tdl", &art.display().to_string());
         } else {
             // the install's loadout first, so tdl's own setup (its Freedoom profile) goes in it too
-            merge_setup(&art, |table| set_loadout(table, &art))?;
+            merge_setup(&art, |table| {
+                set_loadout(table, &art, mode == Mode::InPlace)
+            })?;
             install_tdl(&here, &art, mode, cli, &scratch)?;
             steps.finish(&tdl_step);
         }
@@ -637,7 +639,14 @@ fn run(mut cli: Cli) -> Outcome<()> {
         };
         (song, songs)
     };
-    let tdl = set_up_loadout(&dir, &art, song.as_deref(), &songs, &mut steps);
+    let tdl = set_up_loadout(
+        &dir,
+        &art,
+        song.as_deref(),
+        &songs,
+        mode == Mode::InPlace,
+        &mut steps,
+    );
     if let Some(tdl) = &tdl {
         let mut command = vec![tdl.display().to_string(), "--session".into()];
         command.extend([
@@ -681,6 +690,7 @@ fn set_up_loadout(
     art: &Path,
     song: Option<&Path>,
     songs: &[PathBuf],
+    own: bool,
     steps: &mut journal::Steps,
 ) -> Option<PathBuf> {
     let name = if cfg!(windows) { "tdl.exe" } else { "tdl" };
@@ -731,6 +741,10 @@ fn set_up_loadout(
     if !songs.is_empty() {
         setting_up.push("songs".to_string());
     }
+    // an install --locally switched to settings of its own once, an earlier one's too
+    if own && !steps.done("own settings") {
+        setting_up.push("own settings".to_string());
+    }
     journal::section("setup");
     // 🧹 nacht's own setup TOML of before, now a part of tdl's
     let _ = fs::remove_file(art.join("setup-nacht.toml"));
@@ -768,7 +782,7 @@ fn set_up_loadout(
         }
     };
     let written = merge_setup(art, |table| {
-        set_loadout(table, art);
+        set_loadout(table, art, own);
         // the World at War songs the install has, kept listed so the file is whole
         let have: Vec<PathBuf> = SONGS
             .iter()
@@ -836,13 +850,20 @@ fn set_up_loadout(
     }
 }
 
-/// The install's own loadout in a setup TOML, which tdl doesn't open every time.
-fn set_loadout(table: &mut toml::Table, art: &Path) {
+/// The install's own loadout in a setup TOML, which tdl doesn't open every time; with `own` (an
+/// install `--locally`), with settings of its own (its settings.rite), so nothing the install keeps
+/// (UZDoom, the base wad, the songs) touches tdl's global settings.
+fn set_loadout(table: &mut toml::Table, art: &Path, own: bool) {
     table.insert(
         "loadout".into(),
         art.join("loadout").display().to_string().into(),
     );
     table.insert("remember_loadout".into(), false.into());
+    if own {
+        table.insert("own_settings".into(), true.into());
+    } else {
+        table.remove("own_settings");
+    }
 }
 
 /// Changes tdl's own `setup.toml` in `art` (the one install-tdl writes, its part kept) with
@@ -2023,7 +2044,7 @@ mod tests {
         .unwrap();
         let profile = |name: &'static str| {
             move |table: &mut toml::Table| {
-                set_loadout(table, Path::new("/install/artifacts"));
+                set_loadout(table, Path::new("/install/artifacts"), true);
                 let list = table
                     .entry("profiles")
                     .or_insert(toml::Value::Array(vec![]));
@@ -2061,6 +2082,7 @@ mod tests {
             table["loadout"].as_str(),
             Some("/install/artifacts/loadout")
         );
+        assert_eq!(table["own_settings"].as_bool(), Some(true));
         assert!(!table.contains_key("song"));
         assert!(text.starts_with("# What tdl keeps"));
         // one that isn't TOML is never written over
