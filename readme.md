@@ -89,6 +89,7 @@ Host or join with tdl: the host serves the profile's files, and joiners download
         - The intro music and the game over music.
 - **Boondorl's [Weather library](https://github.com/Boondorl/Weather)**: the blood rain, vendored unchanged under its own license (`LICENSE-weather`).
 - **[Horde Hammer](https://github.com/error-error-fruit-user/horde-hammer)**: the zombies mode itself (rounds, points, doors, the box, perks, drops, last stand, the kick, the HUD), which nacht's own code became.
+- **[NTM's Quick Kick](https://github.com/LocalInsomniac/NTMAi/blob/master/zscript/weapons/kick.txt)** ([forum thread](https://forum.zdoom.org/viewtopic.php?p=1181624#p1181624)): the kick's leg and its animation (the `QKCK` sprites), on Horde Hammer's kick.
 
 ### Made for nacht
 
@@ -102,7 +103,6 @@ Host or join with tdl: the host serves the profile's files, and joiners download
 - The perks' bottles and the four drinking animations, cropped frame by frame from World at War. The first weapons' sprites and sounds (the M1911, .357 Magnum, M1 Garand, M1 Carbine, Kar98k, Thompson, PPSh-41, Type 100, double-barreled shotgun and Ray Gun), converted from World at War; the zombie's sounds from ZDL's COD Zombies; the chalk wall buys, drawn by hand or traced by `tools/chalk.py`. Doomify WaW now makes all of these from the player's own game.
 
 - **dodopod's [ZScript Weapons Library](https://forum.zdoom.org/viewtopic.php?t=61172)**: the first weapons, since rewritten.
-- **[NTM's Quick Kick](https://github.com/LocalInsomniac/NTMAi/blob/master/zscript/weapons/kick.txt)** ([forum thread](https://forum.zdoom.org/viewtopic.php?p=1181624#p1181624)): the old kick, replaced by Horde Hammer's own.
 
 ## License
 
