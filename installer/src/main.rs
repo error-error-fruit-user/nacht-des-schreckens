@@ -542,7 +542,7 @@ fn run(mut cli: Cli) -> Outcome<()> {
         if !make_song {
             steps.skip(SONG.title, "tdl's song, picked once");
         }
-        if !know {
+        if know {
             note!("World at War's songs are to be pulled for tdl to know");
         } else {
             steps.skip("World at War's songs", "the songs tdl knows");
