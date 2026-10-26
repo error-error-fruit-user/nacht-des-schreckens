@@ -29,6 +29,7 @@ It also warns about things UZDoom gets wrong silently:
 """
 
 import argparse
+import json
 import os
 import platform
 import re
@@ -186,19 +187,98 @@ def find_tdl():
     return shutil.which("tdl")
 
 
+# A setup TOML's keys that are paths (relative to its folder), and the ones that are lists of them
+SETUP_PATHS = {"loadout", "uzdoom", "base_wad", "ini", "theme", "splash", "song"}
+SETUP_PATH_LISTS = {"songs", "wads"}
+# tdl's own setup.toml (install-tdl's, when it has run in place), which nacht's setup.toml joins
+TDL_SETUP = os.path.join("published", "artifacts", "setup.toml")
+
+
+def toml_value(value):
+    """`value` (text, a number, a truth or a list of them) as TOML."""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        return repr(value)
+    if isinstance(value, list):
+        return "[" + ", ".join(toml_value(item) for item in value) + "]"
+    return json.dumps(value)
+
+
+def toml_text(table):
+    """A setup TOML's table (keys, and [[profiles]] tables of keys) as TOML."""
+    lines = [f"{key} = {toml_value(value)}" for key, value in table.items()
+             if not (isinstance(value, list) and value and isinstance(value[0], dict))]
+    for key, value in table.items():
+        if isinstance(value, list) and value and isinstance(value[0], dict):
+            for entry in value:
+                lines += ["", f"[[{key}]]"] + [f"{k} = {toml_value(v)}" for k, v in entry.items()]
+    return "\n".join(lines) + "\n"
+
+
+def rebased(table, source, target):
+    """`table`'s paths, relative to the folder `source`, made relative to the folder `target`."""
+    move = lambda path: path if path == "none" else os.path.relpath(os.path.join(source, path), target)
+    out = {}
+    for key, value in table.items():
+        if key in SETUP_PATHS and isinstance(value, str):
+            value = move(value)
+        elif key in SETUP_PATH_LISTS and isinstance(value, list):
+            value = [move(path) for path in value]
+        elif key == "profiles":
+            value = [rebased(profile, source, target) for profile in value]
+        out[key] = value
+    return out
+
+
+def join_tdl_setup():
+    """nacht's setup.toml as a part of tdl's own (published/artifacts/setup.toml, install-tdl's
+    part kept): its keys set, its profiles in place of tdl's by the same name. Returns that file,
+    or setup.toml itself when there is no tomllib (Python before 3.11) to read tdl's."""
+    try:
+        import tomllib
+    except ImportError:
+        return "setup.toml"
+    with open("setup.toml", "rb") as mine:
+        part = rebased(tomllib.load(mine), ".", os.path.dirname(TDL_SETUP))
+    table = {}
+    if os.path.isfile(TDL_SETUP):
+        with open(TDL_SETUP, "rb") as kept:
+            table = tomllib.load(kept)
+    for key, value in part.items():
+        if key == "profiles":
+            profiles = table.setdefault("profiles", [])
+            for profile in value:
+                names = [kept.get("name") for kept in profiles]
+                if profile.get("name") in names:
+                    profiles[names.index(profile.get("name"))] = profile
+                else:
+                    profiles.append(profile)
+        else:
+            table[key] = value
+    os.makedirs(os.path.dirname(TDL_SETUP), exist_ok=True)
+    with open(TDL_SETUP, "w") as out:
+        out.write("# What tdl keeps, with no windows: `tdl setup` reads this (see tdl setup --help).\n"
+                  "# Paths are relative to this folder. install-tdl, install-nacht and publish.py "
+                  "keep their parts in it.\n" + toml_text(table))
+    groans.note(f"nacht's setup.toml joined {TDL_SETUP}")
+    return TDL_SETUP
+
+
 def set_up_platzhalters():
-    """Sets up nacht's loadout and its Nacht des Platzhalters profile with `tdl setup setup.toml`,
-    then says, in a big way, that it can be played."""
+    """Sets up nacht's loadout and its Nacht des Platzhalters profile with `tdl setup` on tdl's own
+    setup.toml, which nacht's joins, then says, in a big way, that it can be played."""
     groans.section("setup")
     tdl = find_tdl()
     if tdl is None:
         groans.other("note: no tdl to set up Nacht des Platzhalters with (../tdl/published/releases/ "
                      "or the PATH); with tdl, run: tdl setup setup.toml", sys.stderr)
         return
+    setup = join_tdl_setup()
     try:
-        groans.run([tdl, "setup", "setup.toml"])
+        groans.run([tdl, "setup", setup])
     except subprocess.CalledProcessError as error:
-        groans.other(f"note: tdl setup setup.toml failed ({error.returncode})", sys.stderr)
+        groans.other(f"note: tdl setup {setup} failed ({error.returncode})", sys.stderr)
         return
     groans.section("play")
     command = f'{tdl} --loadout published/artifacts/loadout launch "Nacht des Platzhalters"'

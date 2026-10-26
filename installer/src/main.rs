@@ -517,6 +517,8 @@ fn run(mut cli: Cli) -> Outcome<()> {
         if steps.done(&tdl_step) && art.join(tdl_name).is_file() {
             steps.skip("tdl", &art.display().to_string());
         } else {
+            // the install's loadout first, so tdl's own setup (its Freedoom profile) goes in it too
+            merge_setup(&art, |table| set_loadout(table, &art))?;
             install_tdl(&here, &art, mode, cli, &scratch)?;
             steps.finish(&tdl_step);
         }
@@ -608,9 +610,10 @@ fn run(mut cli: Cli) -> Outcome<()> {
     Ok(())
 }
 
-/// The install's own loadout (`<art>/loadout`, in the artifacts): `setup-nacht.toml` there makes Nacht des Platzhalters in it, and Nacht des Schreckens once `nacht-waw.pk3` is in the wad
-/// pool (`<dir>/wads`), and the tdl the install put in `art` (or the one on the PATH) runs
-/// `tdl setup` on it. Returns that tdl, or
+/// The install's own loadout (`<art>/loadout`, in the artifacts): nacht's part of tdl's own
+/// `setup.toml` there (beside install-tdl's) makes Nacht des Platzhalters in it, and Nacht des
+/// Schreckens once `nacht-waw.pk3` is in the wad pool (`<dir>/wads`), and the tdl the install put
+/// in `art` (or the one on the PATH) runs `tdl setup` on it. Returns that tdl, or
 /// `None` (said) when there is none or the setup failed. Both profiles get `<dir>/config.ini`.
 fn set_up_loadout(
     dir: &Path,
@@ -637,7 +640,6 @@ fn set_up_loadout(
         return None;
     };
     let wads = dir.join("wads");
-    let quoted = |path: &Path| format!("{:?}", path.display().to_string());
     // 🧾 a profile is set up again only when its pk3s changed (so tdl takes their new hashes), the
     // song only when it was just pulled
     let platzhalters = [wads.join("horde-hammer.pk3"), wads.join("nacht.pk3")];
@@ -650,40 +652,95 @@ fn set_up_loadout(
     let marked = |wads: &[PathBuf]| format!("{} {}", fingerprint(wads), fnv(CONFIG_INI.as_bytes()));
     let platzhalters_step = format!("profile Nacht des Platzhalters {}", marked(&platzhalters));
     let schreckens_step = format!("profile Nacht des Schreckens {}", marked(&schreckens));
-    let ini = quoted(&dir.join(INI));
-    let mut text = format!(
-        "# The install's own loadout, and its profiles: what install-nacht keeps with `tdl setup`.\n\
-         loadout = {}\nremember_loadout = false\n",
-        quoted(&art.join("loadout")),
-    );
+    let ini = dir.join(INI).display().to_string();
     let mut setting_up = Vec::new();
-    if let Some(song) = song {
-        text.push_str(&format!("song = {}\n", quoted(song)));
+    let mut profiles = vec![("Nacht des Platzhalters", &platzhalters[..], None)];
+    if !steps.done(&platzhalters_step) {
+        setting_up.push(platzhalters_step.clone());
+    }
+    if schreckens[2].is_file() {
+        profiles.push(("Nacht des Schreckens", &schreckens[..], Some(1)));
+        if !steps.done(&schreckens_step) {
+            setting_up.push(schreckens_step.clone());
+        }
+    }
+    if song.is_some() {
         setting_up.push("song".to_string());
     }
     if !songs.is_empty() {
-        let known: Vec<String> = songs.iter().map(|song| quoted(song)).collect();
-        text.push_str(&format!("songs = [{}]\n", known.join(", ")));
         setting_up.push("songs".to_string());
     }
-    if !steps.done(&platzhalters_step) {
-        text.push_str(&format!(
-            "\n[[profiles]]\nname = \"Nacht des Platzhalters\"\nwads = [{}, {}]\nini = {ini}\n",
-            quoted(&platzhalters[0]),
-            quoted(&platzhalters[1]),
-        ));
-        setting_up.push(platzhalters_step.clone());
-    }
-    if schreckens[2].is_file() && !steps.done(&schreckens_step) {
-        text.push_str(&format!(
-            "\n[[profiles]]\nname = \"Nacht des Schreckens\"\nplace = 1\nwads = [{}, {}, {}]\nini = {ini}\n",
-            quoted(&schreckens[0]),
-            quoted(&schreckens[1]),
-            quoted(&schreckens[2]),
-        ));
-        setting_up.push(schreckens_step.clone());
-    }
     journal::section("setup");
+    // 🧹 nacht's own setup TOML of before, now a part of tdl's
+    let _ = fs::remove_file(art.join("setup-nacht.toml"));
+    // 🧾 nacht's part of tdl's own setup.toml (install-tdl's part kept): the loadout, its profiles
+    // (replaced by name) and the songs tdl knows; the song only for this run, so a pick in tdl stays
+    let set_profiles = |table: &mut toml::Table| {
+        let list = table
+            .entry("profiles")
+            .or_insert_with(|| toml::Value::Array(Vec::new()));
+        if let Some(list) = list.as_array_mut() {
+            for (name, wads, place) in &profiles {
+                let mut profile = toml::Table::new();
+                profile.insert("name".into(), (*name).into());
+                if let Some(place) = place {
+                    profile.insert("place".into(), toml::Value::Integer(*place));
+                }
+                profile.insert(
+                    "wads".into(),
+                    toml::Value::Array(
+                        wads.iter()
+                            .map(|wad| wad.display().to_string().into())
+                            .collect(),
+                    ),
+                );
+                profile.insert("ini".into(), ini.clone().into());
+                let profile = toml::Value::Table(profile);
+                match list
+                    .iter_mut()
+                    .find(|kept| kept.get("name").and_then(toml::Value::as_str) == Some(*name))
+                {
+                    Some(kept) => *kept = profile,
+                    None => list.push(profile),
+                }
+            }
+        }
+    };
+    let written = merge_setup(art, |table| {
+        set_loadout(table, art);
+        // the World at War songs the install has, kept listed so the file is whole
+        let have: Vec<PathBuf> = SONGS
+            .iter()
+            .map(|song| art.join("songs").join(song.file))
+            .filter(|path| path.is_file())
+            .chain(songs.iter().cloned())
+            .collect();
+        if !have.is_empty() {
+            let known = table
+                .entry("songs")
+                .or_insert_with(|| toml::Value::Array(Vec::new()));
+            if let Some(known) = known.as_array_mut() {
+                for song in &have {
+                    let song = toml::Value::String(song.display().to_string());
+                    if !known.contains(&song) {
+                        known.push(song);
+                    }
+                }
+            }
+        }
+        if let Some(song) = song {
+            table.insert("song".into(), song.display().to_string().into());
+        }
+        set_profiles(table);
+    });
+    let setup = match written {
+        Ok(setup) => setup,
+        Err(problem) => {
+            warn!("{problem}");
+            return None;
+        }
+    };
+    // written every run, so tdl's setup.toml always holds nacht's part; run only when it changed
     if setting_up.is_empty() {
         steps.skip(
             "The install's loadout",
@@ -691,13 +748,16 @@ fn set_up_loadout(
         );
         return Some(tdl);
     }
-    let setup = art.join("setup-nacht.toml");
-    if let Err(problem) = write_text(&setup, &text) {
-        warn!("{problem}");
-        return None;
-    }
     let command = format!("tdl setup {}", setup.display());
-    match journal::run(Command::new(&tdl).arg("setup").arg(&setup), &command) {
+    let ran = journal::run(Command::new(&tdl).arg("setup").arg(&setup), &command);
+    if song.is_some()
+        && let Err(problem) = merge_setup(art, |table| {
+            table.remove("song");
+        })
+    {
+        warn!("{problem}");
+    }
+    match ran {
         Ok(status) if status.success() => {
             for step in setting_up {
                 steps.finish(&step);
@@ -713,6 +773,39 @@ fn set_up_loadout(
             None
         }
     }
+}
+
+/// The install's own loadout in a setup TOML, which tdl doesn't open every time.
+fn set_loadout(table: &mut toml::Table, art: &Path) {
+    table.insert(
+        "loadout".into(),
+        art.join("loadout").display().to_string().into(),
+    );
+    table.insert("remember_loadout".into(), false.into());
+}
+
+/// Changes tdl's own `setup.toml` in `art` (the one install-tdl writes, its part kept) with
+/// `change`, writing it back under tdl's header. `Err` if it is there and isn't TOML, which is
+/// never written over.
+fn merge_setup(art: &Path, change: impl FnOnce(&mut toml::Table)) -> Outcome<PathBuf> {
+    let path = art.join("setup.toml");
+    let mut table = match fs::read_to_string(&path) {
+        Ok(text) => text.parse::<toml::Table>().map_err(|error| {
+            format!(
+                "{} is there and isn't TOML, so it is left alone: {error}",
+                path.display()
+            )
+        })?,
+        Err(_) => toml::Table::new(),
+    };
+    change(&mut table);
+    let text = format!(
+        "# What tdl keeps, with no windows: `tdl setup` reads this (see tdl setup --help).\n\
+         # Paths are relative to this folder. install-tdl and install-nacht keep their parts in it.\n{}",
+        toml::to_string(&table).map_err(|error| error.to_string())?
+    );
+    write_text(&path, &text)?;
+    Ok(path)
 }
 
 /// A short mark of what `files` hold (an FNV-1a hash of their bytes), so a step done with them is
@@ -1744,6 +1837,63 @@ mod tests {
             assert_eq!(download.sha256.len(), 64, "{}", download.name);
             assert!(download.urls.iter().all(|url| url.ends_with(download.name)));
         }
+    }
+
+    #[test]
+    fn nachts_setup_is_a_part_of_tdls() {
+        let art = altar("setup");
+        // install-tdl's setup.toml, as it writes it
+        fs::write(
+            art.join("setup.toml"),
+            "uzdoom = \"uzdoom/uzdoom.AppImage\"\n\n[[profiles]]\nname = \"Freedoom\"\nwads = []\n",
+        )
+        .unwrap();
+        let profile = |name: &'static str| {
+            move |table: &mut toml::Table| {
+                set_loadout(table, Path::new("/install/artifacts"));
+                let list = table
+                    .entry("profiles")
+                    .or_insert(toml::Value::Array(vec![]));
+                let list = list.as_array_mut().unwrap();
+                let mut made = toml::Table::new();
+                made.insert("name".into(), name.into());
+                match list
+                    .iter_mut()
+                    .find(|kept| kept.get("name").and_then(toml::Value::as_str) == Some(name))
+                {
+                    Some(kept) => *kept = toml::Value::Table(made),
+                    None => list.push(toml::Value::Table(made)),
+                }
+                table.insert("song".into(), "songs/beauty.wav".into());
+            }
+        };
+        merge_setup(&art, profile("Nacht des Platzhalters")).unwrap();
+        merge_setup(&art, profile("Nacht des Platzhalters")).unwrap();
+        merge_setup(&art, |table| {
+            table.remove("song");
+        })
+        .unwrap();
+        let text = fs::read_to_string(art.join("setup.toml")).unwrap();
+        let table: toml::Table = text.parse().unwrap();
+        // install-tdl's part kept, nacht's profile once, the loadout set, no song left behind
+        assert_eq!(table["uzdoom"].as_str(), Some("uzdoom/uzdoom.AppImage"));
+        let names: Vec<_> = table["profiles"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|profile| profile["name"].as_str().unwrap())
+            .collect();
+        assert_eq!(names, ["Freedoom", "Nacht des Platzhalters"]);
+        assert_eq!(
+            table["loadout"].as_str(),
+            Some("/install/artifacts/loadout")
+        );
+        assert!(!table.contains_key("song"));
+        assert!(text.starts_with("# What tdl keeps"));
+        // one that isn't TOML is never written over
+        fs::write(art.join("setup.toml"), "not = [toml").unwrap();
+        assert!(merge_setup(&art, |_| {}).is_err());
+        let _ = fs::remove_dir_all(&art);
     }
 
     #[test]

@@ -1,4 +1,5 @@
-# Nacht des Platzhalters: what publish.py sets up with `tdl setup` once nacht.pk3 is built. A
+# Nacht des Platzhalters: nacht's part of tdl's own setup.toml (published/artifacts/setup.toml,
+# install-tdl's), which publish.py joins it to once nacht.pk3 is built, then runs `tdl setup` on. A
 # loadout of nacht's own, beside the built pk3s, which tdl doesn't open every time; in it, a profile
 # that plays the map with Doom's weapons standing in for World at War's (until install-nacht has
 # built them, setting up Nacht des Schreckens beside it). Paths are relative to this folder.
