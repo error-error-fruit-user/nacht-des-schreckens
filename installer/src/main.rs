@@ -202,6 +202,11 @@ struct Cli {
     /// `published/artifacts/` when this runs in place from its `published/releases/`.
     #[arg(long, value_name = "DIR")]
     artifacts: Option<PathBuf>,
+    /// The release folder whose pk3s it installs, as if it ran from there (publish-install.py
+    /// gives `published/releases/` to the install-nacht `cargo run --release` builds); by
+    /// default the folder this program is in
+    #[arg(long, value_name = "DIR")]
+    from: Option<PathBuf>,
     /// World at War's folder, if it isn't in a Steam library this can find
     #[arg(long, value_name = "DIR")]
     waw: Option<PathBuf>,
@@ -417,6 +422,8 @@ fn plan(cli: &Cli, dir: &Path, art: &Path) -> Vec<String> {
                 && !step.starts_with("weapons ")
                 && !step.starts_with("settings ")
         })
+        // a step marked with what it was done with (`tdl <mark>`) by its name alone
+        .map(|step| step.split(' ').next().unwrap_or(step))
         .collect();
     if !earlier.is_empty() {
         lines.push(format!(
@@ -433,7 +440,10 @@ fn plan(cli: &Cli, dir: &Path, art: &Path) -> Vec<String> {
 }
 
 fn run(mut cli: Cli) -> Outcome<()> {
-    let here = program_dir().ok_or("Couldn't tell where this program is")?;
+    let here = match &cli.from {
+        Some(from) => std::path::absolute(from).unwrap_or_else(|_| from.clone()),
+        None => program_dir().ok_or("Couldn't tell where this program is")?,
+    };
     let (mut dir, mut art) = places(&cli, &here)?;
     // ❓ the one question, after what saying yes does; flags given with the y win
     journal::warning(&plan(&cli, &dir, &art));
@@ -492,12 +502,23 @@ fn run(mut cli: Cli) -> Outcome<()> {
     let mut steps = journal::Steps::open(&art, cli.reinstall);
     let scratch = Scratch::new();
     let tdl_name = if cfg!(windows) { "tdl.exe" } else { "tdl" };
+    // 🔁 done again when the tdl it would take (beside this, or the workspace's release) is
+    // another than the one it took, so a newer tdl reaches an install
+    let local: Vec<PathBuf> = ["tdl", "install-tdl"]
+        .iter()
+        .filter_map(|name| beside(&here, name).or_else(|| from_workspace(&here, "tdl", name)))
+        .collect();
+    let tdl_step = if local.is_empty() {
+        "tdl".to_string()
+    } else {
+        format!("tdl {}", fingerprint(&local))
+    };
     if !cli.no_tdl {
-        if steps.done("tdl") && art.join(tdl_name).is_file() {
+        if steps.done(&tdl_step) && art.join(tdl_name).is_file() {
             steps.skip("tdl", &art.display().to_string());
         } else {
             install_tdl(&here, &art, mode, cli, &scratch)?;
-            steps.finish("tdl");
+            steps.finish(&tdl_step);
         }
     }
     journal::section("install");

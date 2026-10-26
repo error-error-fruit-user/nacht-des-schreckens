@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Publish Nacht des Schreckens, then install it with the install-nacht just published.
+"""Publish Nacht des Schreckens, then install it with install-nacht as cargo builds it now.
 
 usage: python3 publish-install.py [--accept] [--no-build | --source] [install-nacht options]
 
@@ -9,10 +9,11 @@ over the same flags on the command line; --accept goes ahead without asking, wit
 line says and the defaults for the rest (in place, no shortcuts). Then it builds the release with
 publish.py (the pk3s, and install-nacht for Windows and as an AppImage, into published/releases/;
 install-nacht is built with doomify, from the workspace's ../doomify-waw and ../hell-hound), or with
---source the pk3s and install-nacht for this machine only (cargo build --release), or with
---no-build nothing at all, having rebuilt the workspace's tdl releases first if their sources are
-newer; and runs the install-nacht in published/releases/, which installs the pk3s, tdl, Blender and
-the song where --mode says, puts doomify's settings in its artifacts' doomify/, builds the weapons
+--source the pk3s only, or with --no-build nothing at all, having rebuilt the workspace's tdl
+releases first if their sources are newer (--no-build too); and runs install-nacht with
+`cargo run --release` in installer/ (built again whenever it, doomify or hell-hound changed, so it
+is never an older one, --no-build or not) on the release in published/releases/ (`--from`), which
+installs the pk3s, tdl, Blender and the songs where --mode says, puts doomify's settings in its artifacts' doomify/, builds the weapons
 with doomify (World at War running, or everything in its cache) and sets up the install's loadout. --mode, --dir, --no-tdl, --no-uzdoom, --no-freedoom,
 --no-blender, --no-doomify, --no-song, --waw, --blender, --desktop-shortcut and --menu-entry go
 to install-nacht (see its --help).
@@ -34,7 +35,6 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 RELEASES = os.path.join(HERE, "published", "releases")
 JOURNAL = os.path.join(HERE, "published", "artifacts", "publish-install.log")
 WINDOWS = platform.system() == "Windows"
-EXE = ".exe" if WINDOWS else ""
 NAME = "nacht-des-schreckens"
 # The workspace's tools install-nacht takes from their releases, the checkouts each is built from,
 # and the release files it needs
@@ -134,19 +134,17 @@ def plan(args):
     pk3s = ("pack nacht/ into published/releases/nacht.pk3 (with LICENSE-weather) and "
             "../horde-hammer into horde-hammer.pk3 (in its published/releases/, and a copy here)")
     lines = ["Saying yes will:"]
+    lines.append("  - rebuild the workspace's releases of tdl (its publish.py) if its sources are "
+                 "newer than them, for install-nacht to take")
     if args.no_build:
-        lines.append("  - build nothing, and install what published/releases/ has now")
+        lines.append("  - publish nothing, and install the pk3s published/releases/ has now")
     else:
-        lines.append("  - rebuild the workspace's releases of tdl (its publish.py) if its sources are "
-                     "newer than them, for install-nacht to take")
         lines.append(f"  - {pk3s}, replacing what is there")
-        if args.source:
-            lines.append(f"  - build install-nacht{EXE} for this machine (cargo build --release in "
-                         "installer/) and copy it into published/releases/")
-        else:
+        if not args.source:
             lines.append("  - build install-nacht, with doomify in it, into published/releases/: as an AppImage (needs "
                          "mksquashfs) and cross-built for Windows (Rust's x86_64-pc-windows-gnu target)")
-    lines.append("  - run install-nacht from published/releases/, which:")
+    lines.append("  - run install-nacht with cargo run --release in installer/ (built again if it, "
+                 "doomify or hell-hound changed) on the release in published/releases/, which:")
     user = f"%LOCALAPPDATA%\\Programs\\{NAME}" if WINDOWS else f"~/.local/opt/{NAME}"
     lines.append({
         "in-place": "    - installs in published/releases/ itself (or --dir)",
@@ -222,10 +220,10 @@ def refresh_tools():
 
 
 def build(args):
-    if args.no_build:
-        return
     groans.section("build")
     refresh_tools()
+    if args.no_build:
+        return
     if not args.reinstall and not args.source and groans.up_to_date([os.path.join(RELEASES, name) for name in ("nacht.pk3", "horde-hammer.pk3", "install-nacht" + (".exe" if WINDOWS else ".AppImage"))], [HERE] + [os.path.join(os.path.dirname(HERE), name) for name in BUILT_WITH]):
         groans.say("skip", "The release is newer than its sources: nothing to build "
                    "(--reinstall builds it again)", what="Nacht des Schreckens's release", place=RELEASES)
@@ -233,27 +231,18 @@ def build(args):
 
     if args.source:
         groans.run([sys.executable, "publish.py", "--no-appimages"], cwd=HERE, voiced=True)
-        groans.run(["cargo", "build", "--release"], cwd=os.path.join(HERE, "installer"))
-        shutil.copy2(os.path.join(HERE, "installer", "target", "release", "install-nacht" + EXE),
-                     os.path.join(RELEASES, "install-nacht" + EXE))
-        groans.note(f"copied the release build into {RELEASES}")
         return
     groans.run([sys.executable, "publish.py"], cwd=HERE, voiced=True)
-    # 🧹 a plain install-nacht left by --source would be taken over the AppImage just built
-    leftover = os.path.join(RELEASES, "install-nacht")
-    if not WINDOWS and os.path.isfile(leftover):
-        os.remove(leftover)
 
 
 def installer():
-    """The install-nacht in published/releases/: the .exe on Windows, else the plain one --source
-    built or the AppImage."""
-    names = ["install-nacht.exe"] if WINDOWS else ["install-nacht", "install-nacht.AppImage"]
-    for name in names:
-        path = os.path.join(RELEASES, name)
-        if os.path.isfile(path):
-            return path
-    sys.exit("There is no install-nacht in published/releases/: build it (leave out --no-build).")
+    """install-nacht as `cargo run --release` builds it from installer/ (again whenever it, doomify
+    or hell-hound changed), run on the release in published/releases/ as if it were there."""
+    for pk3 in ("horde-hammer.pk3", "nacht.pk3"):
+        if not os.path.isfile(os.path.join(RELEASES, pk3)):
+            sys.exit(f"There is no {pk3} in published/releases/: publish it (leave out --no-build).")
+    return ["cargo", "run", "--release", "--manifest-path",
+            os.path.join(HERE, "installer", "Cargo.toml"), "--", "--from", RELEASES]
 
 
 def parser():
@@ -262,9 +251,10 @@ def parser():
                        help="go ahead without asking, with the defaults for what isn't given")
     build_how = flags.add_mutually_exclusive_group()
     build_how.add_argument("--no-build", action="store_true",
-                           help="install what published/releases/ has now, building nothing")
+                           help="install the pk3s published/releases/ has now, publishing nothing "
+                                "(install-nacht is still cargo's current build)")
     build_how.add_argument("--source", action="store_true",
-                           help="build the pk3s and install-nacht for this machine only")
+                           help="publish the pk3s only, without install-nacht's AppImage and .exe")
     passed = flags.add_argument_group("passed to install-nacht")
     passed.add_argument("--mode", choices=["in-place", "user"], default="in-place")
     passed.add_argument("--dir")
@@ -296,7 +286,7 @@ def main():
                  os.path.join(os.path.dirname(HERE), "horde-hammer", "published")])
     build(args)
     groans.section("install")
-    command = [installer(), "--accept", "--mode", args.mode]
+    command = installer() + ["--accept", "--mode", args.mode]
     for flag, value in (("--dir", args.dir), ("--blender", args.blender), ("--waw", args.waw)):
         if value:
             command += [flag, value]
