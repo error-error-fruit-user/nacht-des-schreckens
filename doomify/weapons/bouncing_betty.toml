@@ -1,10 +1,11 @@
 # Bouncing Betty: Der Riese's mine_bouncing_betty. Equipment: planted on the floor, it jumps and
-# goes off when a zombie comes close.
+# goes off when a zombie comes close. Off the wall, or from the box.
 name = "Bouncing Betty"
 class = "BouncingBetty"
 sprite = "BB"
 kind = "mine"
 slot = 8
+box_weight = 1
 wall = { cost = 1000, chalk = "bouncing_betty_chalk_c" }
 
 [game]

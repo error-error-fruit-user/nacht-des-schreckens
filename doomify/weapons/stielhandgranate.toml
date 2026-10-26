@@ -1,10 +1,12 @@
 # Stielhandgranate: Der Riese's stick grenade (stielhandgranate). Equipment: the equipment key
-# brings it up, and players start with two. Its blast is World at War's frag grenade's.
+# brings it up, and players start with two; the box gives more. Its blast is World at War's frag
+# grenade's.
 name = "Stielhandgranate"
 class = "Stielhandgranate"
 sprite = "SG"
 kind = "grenade"
 slot = 8
+box_weight = 1
 wall = { cost = 250, chalk = "grenade_bag_chalk_c" }
 
 [game]
