@@ -36,8 +36,8 @@
 //! Man, The One and nacht's own, Der Riese's Beauty of Annihilation; and sets up the install's
 //! loadout with `tdl setup`, tdl knowing them all and nacht's as its song.
 //!
-//! It is built with installation-groans, the installers' library (the `installation-groans/`
-//! submodule): its command line is the `Cli` struct, the question and the journal are the
+//! It is built with installation-groans, the installers' library (a git dependency, the
+//! workspace's checkout in the workspace): its command line is the `Cli` struct, the question and the journal are the
 //! library's, and every run ends with a press of Enter, so what was done can be read first.
 
 use std::{
