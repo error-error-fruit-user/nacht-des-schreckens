@@ -14,7 +14,6 @@ description = "Installs Nacht des Schreckens and everything it needs, then rebui
 doomify = { path = "../../doomify-waw" }
 # the installers' library (the workspace's checkout stands in for it: ../.cargo/config.toml)
 installation-groans = { git = "https://github.com/error-error-fruit-user/installation-groans.git" }
-sha2 = "0.10"
 toml = { version = "0.8", default-features = false, features = ["parse", "display"] }
 ureq = "3.4.2"
 zip = { version = "2.6.1", default-features = false, features = ["deflate"] }

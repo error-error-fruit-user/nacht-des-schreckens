@@ -48,8 +48,7 @@ use std::{
     process::{Command, ExitCode},
 };
 
-use installation_groans::{Mode, Places, journal, note, say, warn};
-use sha2::{Digest, Sha256};
+use installation_groans::{Installation, Mode, Places, journal, note, say, warn};
 
 /// The pk3s nacht is played with, in the order they load.
 const PK3S: [&str; 2] = ["horde-hammer.pk3", "nacht.pk3"];
@@ -126,35 +125,36 @@ mod embedded {
     include!(concat!(env!("OUT_DIR"), "/embedded.rs"));
 }
 
-/// A file to download: where from (the first that works), and what it must be.
-struct Download {
-    name: &'static str,
-    urls: &'static [&'static str],
-    size: u64,
-    sha256: &'static str,
-}
-
-/// Blender 4.2.9 LTS for Linux; doomify needs 4.0 or newer. The hash is the one in the
-/// release's `blender-4.2.9.sha256`.
-const BLENDER_LINUX: Download = Download {
-    name: "blender-4.2.9-linux-x64.tar.xz",
-    urls: &[
-        "https://download.blender.org/release/Blender4.2/blender-4.2.9-linux-x64.tar.xz",
-        "https://mirrors.dotsrc.org/blender/blender-release/Blender4.2/blender-4.2.9-linux-x64.tar.xz",
-    ],
-    size: 355_259_956,
-    sha256: "dfbc127a7d28f9c2175b23bf9d6701b2855f31eedfb391f9a6e60adb24572846",
+/// Blender 4.2.9 LTS (doomify needs 4.0 or newer), for Windows or Linux; the hashes are the ones in
+/// the release's `blender-4.2.9.sha256`. It unpacks into a folder of its own, `blender/` in the
+/// artifacts.
+const BLENDER: Installation = if cfg!(windows) {
+    Installation {
+        name: "Blender",
+        version: "4.2.9 LTS",
+        download: Some("https://download.blender.org/release/Blender4.2/blender-4.2.9-windows-x64.zip"),
+        mirrors: &["https://mirrors.dotsrc.org/blender/blender-release/Blender4.2/blender-4.2.9-windows-x64.zip"],
+        size: 386_972_284,
+        sha256: Some("223cd22afc5cab3f8cb43006574f1c962ff9bb9e07418c3f4f2542b7c34899cb"),
+        into: "blender",
+        file: "blender-4.2.9-windows-x64/blender.exe",
+        ..Installation::default()
+    }
+} else {
+    Installation {
+        name: "Blender",
+        version: "4.2.9 LTS",
+        download: Some("https://download.blender.org/release/Blender4.2/blender-4.2.9-linux-x64.tar.xz"),
+        mirrors: &["https://mirrors.dotsrc.org/blender/blender-release/Blender4.2/blender-4.2.9-linux-x64.tar.xz"],
+        size: 355_259_956,
+        sha256: Some("dfbc127a7d28f9c2175b23bf9d6701b2855f31eedfb391f9a6e60adb24572846"),
+        into: "blender",
+        file: "blender-4.2.9-linux-x64/blender",
+        ..Installation::default()
+    }
 };
-/// Blender 4.2.9 LTS for Windows.
-const BLENDER_WINDOWS: Download = Download {
-    name: "blender-4.2.9-windows-x64.zip",
-    urls: &[
-        "https://download.blender.org/release/Blender4.2/blender-4.2.9-windows-x64.zip",
-        "https://mirrors.dotsrc.org/blender/blender-release/Blender4.2/blender-4.2.9-windows-x64.zip",
-    ],
-    size: 386_972_284,
-    sha256: "223cd22afc5cab3f8cb43006574f1c962ff9bb9e07418c3f4f2542b7c34899cb",
-};
+/// Whether [`BLENDER`] is a release for this system.
+const BLENDER_HERE: bool = cfg!(all(target_arch = "x86_64", any(windows, target_os = "linux")));
 
 /// World at War's Nacht der Untoten on Doom 2, in tdl
 #[installation_groans::cli(
@@ -173,7 +173,7 @@ struct Cli {
     #[installation_groans::On]
     freedoom: bool,
     /// Downloads Blender 4.2.9 LTS into the artifacts, if no Blender 4.0 or newer is installed
-    #[installation_groans::On]
+    #[installation_groans::Artifact(BLENDER)]
     blender: bool,
     /// Rebuilds the weapons from your game with doomify
     #[installation_groans::On]
@@ -221,8 +221,29 @@ fn main() -> ExitCode {
             ));
             return;
         }
+        // 🎨 a Blender given or found is rendered with, and none is downloaded
+        let found = cli.blender_path.clone().or_else(|| find_blender(&location.places.artifacts));
+        if let Some(found) = &found {
+            journal::speak_in(
+                installation_groans::TOILING_THROUGH_HELL,
+                installation_groans::COMPUTER_SPEAK,
+                cli.computer_speak,
+            );
+            journal::tell(
+                "found",
+                &[("what", "Blender"), ("place", &found.display().to_string())],
+                &format!("Blender: {}", found.display()),
+            );
+        }
+        if found.is_some() || !BLENDER_HERE {
+            if !BLENDER_HERE && found.is_none() && cli.blender {
+                say!("Blender has no pinned release here: install it (blender.org) for doomify");
+            }
+            cli.blender = false;
+        }
         location.install(terminal, &cli);
-        if let Err(problem) = install(&location, &cli) {
+        let blender = found.or_else(|| Some(location.artifacts.blender.path.clone()).filter(|path| path.is_file()));
+        if let Err(problem) = install(&location, &cli, blender) {
             installation_groans::fail(&problem);
         }
     });
@@ -329,7 +350,7 @@ fn plan(cli: &Cli, places: &Places) -> Vec<String> {
 
 /// Everything after what the library did (the question, the folders, the journal and its
 /// beginning): tdl, the pk3s, doomify's settings, Blender, the weapons, the songs and the loadout.
-fn install(location: &Location, cli: &Cli) -> Outcome<()> {
+fn install(location: &Location, cli: &Cli, blender: Option<PathBuf>) -> Outcome<()> {
     let (here, dir, art) = (&location.here, &location.dir, &location.places.artifacts);
     let mode = location.mode;
     note!(
@@ -372,11 +393,6 @@ fn install(location: &Location, cli: &Cli) -> Outcome<()> {
     place_ini(dir, cli.reinstall)?;
     let settings = art.join(DOOMIFY);
     place_settings(&settings, &mut steps)?;
-    let blender = match &cli.blender_path {
-        Some(path) => Some(path.clone()),
-        None if !cli.blender => find_blender(art),
-        None => ensure_blender(art)?,
-    };
     note!("blender: {:?}", blender);
     let built = dir.join("wads").join("nacht-waw.pk3");
     // 🔫 built again when doomify's source or the installed settings changed (doomify's cache
@@ -1304,91 +1320,6 @@ fn blender_in(folder: &Path) -> Option<PathBuf> {
         .find(|path| path.is_file())
 }
 
-/// Finds Blender or downloads it into `<dir>/blender/` (the install's question covered it).
-fn ensure_blender(dir: &Path) -> Outcome<Option<PathBuf>> {
-    if let Some(found) = find_blender(dir) {
-        journal::tell(
-            "found",
-            &[("what", "Blender"), ("place", &found.display().to_string())],
-            &format!("Blender: {}", found.display()),
-        );
-        return Ok(Some(found));
-    }
-    let download = if cfg!(all(windows, target_arch = "x86_64")) {
-        &BLENDER_WINDOWS
-    } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
-        &BLENDER_LINUX
-    } else {
-        say!("Blender has no pinned release here: install it (blender.org) for doomify");
-        return Ok(None);
-    };
-    journal::section("download");
-    let scratch = Scratch::new();
-    let file = fetch(download, &scratch)?;
-    let folder = dir.join("blender");
-    journal::tell(
-        "unpack",
-        &[
-            ("name", download.name),
-            ("place", &folder.display().to_string()),
-        ],
-        &format!("unpacking {} into {}", download.name, folder.display()),
-    );
-    let part = dir.join("blender.part");
-    let _ = fs::remove_dir_all(&part);
-    fs::create_dir_all(&part).map_err(|error| format!("{}: {error}", part.display()))?;
-    let unpacked = if download.name.ends_with(".zip") {
-        unpack_zip(&file, &part)
-    } else {
-        let status = Command::new("tar")
-            .arg("-xJf")
-            .arg(&file)
-            .arg("-C")
-            .arg(&part)
-            .status();
-        match status {
-            Ok(status) if status.success() => Ok(()),
-            Ok(status) => Err(format!("tar failed ({status})")),
-            Err(error) => Err(format!(
-                "couldn't run tar (needed to unpack Blender): {error}"
-            )),
-        }
-    };
-    if let Err(problem) = unpacked {
-        let _ = fs::remove_dir_all(&part);
-        return Err(problem);
-    }
-    let _ = fs::remove_dir_all(&folder);
-    fs::rename(&part, &folder).map_err(|error| format!("{}: {error}", folder.display()))?;
-    let found = blender_in(&folder).ok_or("Blender unpacked, but its executable isn't there")?;
-    note!("Blender: {}", found.display());
-    Ok(Some(found))
-}
-
-/// Unpacks every file in the zip into `folder`; a name that would land outside it is refused.
-fn unpack_zip(file: &Path, folder: &Path) -> Outcome<()> {
-    let problem = |error: &dyn std::fmt::Display| format!("{}: {error}", file.display());
-    let mut archive = zip::ZipArchive::new(fs::File::open(file).map_err(|e| problem(&e))?)
-        .map_err(|e| problem(&e))?;
-    for index in 0..archive.len() {
-        let mut entry = archive.by_index(index).map_err(|e| problem(&e))?;
-        let name = entry
-            .enclosed_name()
-            .ok_or_else(|| format!("{} has a file named {:?}", file.display(), entry.name()))?;
-        let to = folder.join(name);
-        if entry.is_dir() {
-            fs::create_dir_all(&to).map_err(|e| format!("{}: {e}", to.display()))?;
-        } else {
-            if let Some(parent) = to.parent() {
-                fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
-            }
-            let mut out = fs::File::create(&to).map_err(|e| format!("{}: {e}", to.display()))?;
-            io::copy(&mut entry, &mut out).map_err(|e| format!("{}: {e}", to.display()))?;
-        }
-    }
-    Ok(())
-}
-
 /// Builds the weapons with doomify from the settings in `settings` into `<art>/nacht-waw/`, and
 /// packs them into `packed` (the wad pool's `nacht-waw.pk3`). It needs World at War running with
 /// Der Riese loaded unless everything is in doomify's cache. Whether it built them.
@@ -1599,22 +1530,6 @@ fn make_command(art: &Path, command: &[String]) -> Outcome<String> {
     }
 }
 
-/// Downloads `download` into the scratch folder from the first of its URLs that works, checking
-/// its size and SHA-256. Returns where it is.
-fn fetch(download: &Download, scratch: &Scratch) -> Outcome<PathBuf> {
-    let mut last = String::new();
-    for url in download.urls {
-        match fetch_from(download, url, scratch) {
-            Ok(path) => return Ok(path),
-            Err(problem) => {
-                warn!("{problem}");
-                last = problem;
-            }
-        }
-    }
-    Err(last)
-}
-
 /// Downloads `url` into the scratch folder as `name`, without a hash to check it against. It
 /// must not be empty.
 fn fetch_unpinned(url: &str, name: &str, scratch: &Scratch) -> Outcome<PathBuf> {
@@ -1638,86 +1553,6 @@ fn fetch_unpinned(url: &str, name: &str, scratch: &Scratch) -> Outcome<PathBuf> 
     }
     say!("{name}: {} MB", total / 1_000_000);
     Ok(path)
-}
-
-fn fetch_from(download: &Download, url: &str, scratch: &Scratch) -> Outcome<PathBuf> {
-    let path = scratch.dir()?.join(download.name);
-    journal::tell(
-        "download",
-        &[
-            ("name", download.name),
-            ("size", &journal::size(download.size)),
-        ],
-        &format!(
-            "Downloading {} ({})",
-            download.name,
-            journal::size(download.size)
-        ),
-    );
-    note!(
-        "downloading {url} ({} bytes, SHA-256 {}) to {}",
-        download.size,
-        download.sha256,
-        path.display()
-    );
-    let failed = |error: &dyn std::fmt::Display| format!("downloading {url}: {error}");
-    let mut reader = ureq::get(url)
-        .call()
-        .map_err(|error| failed(&error))?
-        .into_body()
-        .into_reader();
-    let mut file = fs::File::create(&path).map_err(|error| failed(&error))?;
-    let mut hasher = Sha256::new();
-    let mut buf = vec![0; 256 * 1024];
-    let mut total = 0;
-    let mut shown = u64::MAX;
-    loop {
-        let read = reader.read(&mut buf).map_err(|error| failed(&error))?;
-        if read == 0 {
-            break;
-        }
-        total += read as u64;
-        if total > download.size {
-            return Err(failed(&"it is bigger than it should be"));
-        }
-        hasher.update(&buf[..read]);
-        file.write_all(&buf[..read])
-            .map_err(|error| failed(&error))?;
-        let percent = total * 100 / download.size;
-        if percent != shown {
-            shown = percent;
-            eprint!("\r{}: {percent:>3}%", download.name);
-        }
-    }
-    eprintln!();
-    file.sync_all().map_err(|error| failed(&error))?;
-    if total != download.size {
-        return Err(failed(&"it ended early"));
-    }
-    let hash = hex(&hasher.finalize());
-    if hash != download.sha256 {
-        note!("{} came with SHA-256 {hash}", download.name);
-        journal::tell(
-            "corrupted",
-            &[("name", download.name)],
-            &format!("{} isn't the file it should be", download.name),
-        );
-        return Err(failed(&"it isn't the file it should be (its hash differs)"));
-    }
-    note!(
-        "{}: {total} bytes, and its hash is the one it should be",
-        download.name
-    );
-    journal::tell(
-        "verified",
-        &[("name", download.name)],
-        &format!("{}: checked", download.name),
-    );
-    Ok(path)
-}
-
-fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 /// A folder for the downloads, in the system's temporary folder, made the first time it is needed
@@ -1756,10 +1591,10 @@ mod tests {
 
     #[test]
     fn the_pinned_downloads_are_whole_descriptions() {
-        for download in [&BLENDER_LINUX, &BLENDER_WINDOWS] {
-            assert_eq!(download.sha256.len(), 64, "{}", download.name);
-            assert!(download.urls.iter().all(|url| url.ends_with(download.name)));
-        }
+        let name = BLENDER.download.unwrap().rsplit('/').next().unwrap();
+        assert_eq!(BLENDER.sha256.unwrap().len(), 64);
+        assert!(BLENDER.mirrors.iter().all(|url| url.ends_with(name)));
+        assert!(BLENDER.file.starts_with(name.split(".tar").next().unwrap().trim_end_matches(".zip")));
     }
 
     #[test]
