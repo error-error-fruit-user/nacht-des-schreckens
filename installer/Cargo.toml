@@ -12,8 +12,8 @@ description = "Installs Nacht des Schreckens and everything it needs, then rebui
 [dependencies]
 # doomify, from the Doomify WaW checkout beside nacht (with hell-hound beside it)
 doomify = { path = "../../doomify-waw" }
-regex-lite = "0.1"
-clap = { version = "4.5.41", features = ["derive", "wrap_help"] }
+# the installers' library, from nacht's installation-groans submodule
+installation-groans = { path = "../installation-groans" }
 sha2 = "0.10"
 toml = { version = "0.8", default-features = false, features = ["parse", "display"] }
 ureq = "3.4.2"

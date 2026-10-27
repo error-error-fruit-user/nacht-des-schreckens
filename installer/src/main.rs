@@ -20,7 +20,7 @@
 //! pinned hash, since the latest release isn't known when this is built; they come over HTTPS from
 //! the project's own releases.
 //!
-//! `--locally` (in place) or `--user-wide` (for you, like `install-tdl --mode user`) says where to
+//! `--locally` (in place) or `--user-wide` (for you, as install-tdl's) says where to
 //! install, and one of them is needed: without either, nothing is done. Nothing is
 //! installed for everyone, so it never needs root or an administrator, and it won't run as root. The payload goes in that folder: the pk3s, in `wads/` (a pool tdl offers).
 //! Everything else is an artifact, in `artifacts/` there (nacht's `published/artifacts/` when this
@@ -35,16 +35,10 @@
 //! in a Steam library, or `--waw`) into `songs/` (`--no-song` leaves them): Lullaby for a Dead
 //! Man, The One and nacht's own, Der Riese's Beauty of Annihilation; and sets up the install's
 //! loadout with `tdl setup`, tdl knowing them all and nacht's as its song.
-
-/// The journal and the voice: installation-groans' groans.rs, built in (see `build.rs`).
-#[macro_use]
-#[allow(
-    dead_code,
-    reason = "groans.rs serves every installer; each uses what it needs"
-)]
-mod journal {
-    include!(concat!(env!("OUT_DIR"), "/groans/groans.rs"));
-}
+//!
+//! It is built with installation-groans, the installers' library (the `installation-groans/`
+//! submodule): its command line is the `Cli` struct, the question and the journal are the
+//! library's, and every run ends with a press of Enter, so what was done can be read first.
 
 use std::{
     ffi::OsString,
@@ -54,7 +48,7 @@ use std::{
     process::{Command, ExitCode},
 };
 
-use clap::{CommandFactory, Parser};
+use installation_groans::{Mode, Places, journal, note, say, warn};
 use sha2::{Digest, Sha256};
 
 /// The pk3s nacht is played with, in the order they load.
@@ -162,132 +156,52 @@ const BLENDER_WINDOWS: Download = Download {
     sha256: "223cd22afc5cab3f8cb43006574f1c962ff9bb9e07418c3f4f2542b7c34899cb",
 };
 
-/// Installs Nacht des Schreckens, its tools and, if World at War is running, its weapons.
-#[derive(Parser)]
-#[command(version, about)]
+/// World at War's Nacht der Untoten on Doom 2, in tdl
+#[installation_groans::cli(
+    title = "Nacht des Schreckens",
+    folder = "nacht-des-schreckens",
+    plan = plan
+)]
 struct Cli {
-    /// Goes ahead without asking, with the defaults for what isn't given (no shortcuts); where
-    /// to install is still needed (--locally or --user-wide)
-    #[arg(long)]
-    accept: bool,
-    /// Installs in place, next to this program (or its --from folder). This or --user-wide is needed
-    #[arg(long, conflicts_with = "user_wide")]
-    locally: bool,
-    /// Installs for you only, in your own folder (~/.local/opt, or %LOCALAPPDATA%\Programs on
-    /// Windows), tdl on your PATH. This or --locally is needed
-    #[arg(long)]
-    user_wide: bool,
-    /// Makes `nacht` a command anywhere in the terminal, opening tdl on the install's loadout
-    #[arg(long)]
-    command: bool,
-    /// The folder to install into. Defaults to the one this program is in (--locally) or your
-    /// own (--user-wide).
-    #[arg(long, value_name = "DIR")]
-    dir: Option<PathBuf>,
-    /// Leaves tdl, UZDoom and Freedoom 2 out (`install-tdl` isn't run).
-    #[arg(long)]
-    no_tdl: bool,
-    /// Passed to install-tdl: leaves UZDoom out.
-    #[arg(long)]
-    no_uzdoom: bool,
-    /// Passed to install-tdl: leaves Freedoom 2 out.
-    #[arg(long)]
-    no_freedoom: bool,
-    /// Doesn't download Blender.
-    #[arg(long)]
-    no_blender: bool,
-    /// Doesn't build the weapons with doomify.
-    #[arg(long)]
-    no_doomify: bool,
-    /// Doesn't open tdl on the install's loadout at the end
-    #[arg(long)]
-    no_play: bool,
-    /// Doesn't pull World at War's songs for tdl: nacht's (Beauty of Annihilation), which becomes
-    /// tdl's song, Lullaby for a Dead Man and The One
-    #[arg(long)]
-    no_song: bool,
-    /// Where everything but the pk3s goes (tdl, UZDoom, Freedoom 2, Blender, doomify's settings and
-    /// what it builds, the song, the loadout, the journal). Defaults to `artifacts/` in the install's folder, or nacht's
-    /// `published/artifacts/` when this runs in place from its `published/releases/`.
-    #[arg(long, value_name = "DIR")]
-    artifacts: Option<PathBuf>,
-    /// The release folder whose pk3s it installs, as if it ran from there (publish-install.py
-    /// gives `published/releases/` to the install-nacht `cargo run --release` builds); by
-    /// default the folder this program is in
-    #[arg(long, value_name = "DIR")]
-    from: Option<PathBuf>,
-    /// World at War's folder, if it isn't in a Steam library this can find
-    #[arg(long, value_name = "DIR")]
-    waw: Option<PathBuf>,
-    /// The Blender doomify renders with, instead of finding or downloading one.
-    #[arg(long, value_name = "PATH")]
-    blender: Option<PathBuf>,
-    /// Does everything again, where a run picks up where the last one left off: tdl, doomify's
-    /// settings (yours replaced), the weapons, the song (put back as tdl's though another was
-    /// picked since) and the profiles
-    #[arg(long)]
-    reinstall: bool,
+    /// Runs install-tdl, which puts tdl in the artifacts
+    #[installation_groans::On]
+    tdl: bool,
+    /// Has install-tdl download UZDoom
+    #[installation_groans::On]
+    uzdoom: bool,
+    /// Has install-tdl download Freedoom 2
+    #[installation_groans::On]
+    freedoom: bool,
+    /// Downloads Blender 4.2.9 LTS into the artifacts, if no Blender 4.0 or newer is installed
+    #[installation_groans::On]
+    blender: bool,
+    /// Rebuilds the weapons from your game with doomify
+    #[installation_groans::On]
+    doomify: bool,
+    /// Pulls World at War's songs for tdl: nacht's (Beauty of Annihilation), which becomes tdl's
+    /// song, Lullaby for a Dead Man and The One
+    #[installation_groans::On]
+    song: bool,
+    /// Opens tdl on the install's loadout at the end
+    #[installation_groans::On]
+    play: bool,
     /// Pulls and renders every weapon again (doomify's force), though they were built and are in
     /// the cache; needs World at War running
-    #[arg(long)]
     rerender: bool,
-    /// Makes a shortcut on the desktop that opens tdl on the install's loadout, with the system's
-    /// lock icon
-    #[arg(long)]
-    desktop_shortcut: bool,
-    /// Makes an entry in the app menu (the Start menu on Windows) that opens tdl on the install's
-    /// loadout, with the system's lock icon
-    #[arg(long)]
-    menu_entry: bool,
-    /// Says what it does plainly and formally, rather than as a descent through hell (and has
-    /// install-tdl do the same)
-    #[arg(long)]
-    computer_speak: bool,
+    /// Makes nacht a command anywhere in the terminal, opening tdl on the install's loadout
+    command: bool,
+    /// World at War's folder, if it isn't in a Steam library this can find
+    waw: Option<PathBuf>,
+    /// The Blender doomify renders with, instead of finding or downloading one
+    #[installation_groans::Flag("blender")]
+    blender_path: Option<PathBuf>,
 }
 
-/// One of installation-groans' voices, as this was built with it (see `build.rs`): the same trick
-/// as `const_toml!`, from the build's own folder.
-macro_rules! const_groan {
-    ($voice:literal) => {
-        include_str!(concat!(env!("OUT_DIR"), "/groans/", $voice))
-    };
-}
-
-/// Toiling Through Hell, the voice the install speaks in unless told `--computer-speak`.
-const TOILING_THROUGH_HELL: &str = const_groan!["toiling-through-hell.toml"];
-/// Computer Speak, for `--computer-speak`.
-const COMPUTER_SPEAK: &str = const_groan!["computer-speak.toml"];
-
-/// Where nacht lives.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum Mode {
-    /// Next to this program.
-    InPlace,
-    /// Copied into your own folder, with the `tdl` command on your PATH.
-    User,
-}
-
-impl Mode {
-    fn flag(self) -> &'static str {
-        match self {
-            Mode::InPlace => "in-place",
-            Mode::User => "user",
-        }
-    }
-}
+#[installation_groans::location(Cli)]
+struct Location;
 
 /// What went wrong, for the user.
 type Outcome<T> = Result<T, String>;
-
-/// The folder this program is in. An AppImage runs from a mount that goes away with it, so for
-/// one it is the folder of the AppImage file itself (`$APPIMAGE`).
-fn program_dir() -> Option<PathBuf> {
-    let exe = std::env::var_os("APPIMAGE")
-        .map(PathBuf::from)
-        .filter(|path| path.is_file())
-        .or_else(|| std::env::current_exe().ok())?;
-    exe.parent().map(Path::to_path_buf)
-}
 
 fn main() -> ExitCode {
     // 🎣 Blender's script pulls what a TOML names from the game through this program
@@ -295,15 +209,23 @@ fn main() -> ExitCode {
     if args.get(1).is_some_and(|arg| arg == "--script") {
         return pull_for_blender(&args[1..]);
     }
-    let cli = Cli::parse();
-    journal::speak_in(TOILING_THROUGH_HELL, COMPUTER_SPEAK, cli.computer_speak);
-    match run(cli) {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(problem) => {
-            warn!("{problem}");
-            ExitCode::FAILURE
+    installation_groans::run(|terminal| {
+        let mut cli = Cli::new();
+        let Some(location) = installation_groans::prompt_user(terminal, &mut cli) else {
+            return;
+        };
+        if let Some(pk3) = PK3S.iter().find(|pk3| !location.here.join(pk3).is_file()) {
+            installation_groans::fail(&format!(
+                "{pk3} isn't next to this program, in {}: run it from the published folder",
+                location.here.display()
+            ));
+            return;
         }
-    }
+        location.install(terminal, &cli);
+        if let Err(problem) = install(&location, &cli) {
+            installation_groans::fail(&problem);
+        }
+    });
 }
 
 /// `--script TOML --out DIR [--pid N]`, run by doomify's Blender script: pulls what the TOML names
@@ -332,69 +254,26 @@ fn pull_for_blender(args: &[OsString]) -> ExitCode {
     }
 }
 
-/// Where the user said to install: `--locally` or `--user-wide`, or neither yet.
-fn mode(cli: &Cli) -> Option<Mode> {
-    if cli.locally {
-        Some(Mode::InPlace)
-    } else if cli.user_wide {
-        Some(Mode::User)
-    } else {
-        None
-    }
-}
-
-/// Where nacht goes and where its artifacts go, as `cli` says; `None` until it says where.
-fn places(cli: &Cli, here: &Path) -> Outcome<Option<(PathBuf, PathBuf)>> {
-    let Some(mode) = mode(cli) else {
-        return Ok(None);
-    };
-    let dir = match &cli.dir {
-        Some(dir) => std::path::absolute(dir).unwrap_or_else(|_| dir.clone()),
-        None => install_dir(mode, here)?,
-    };
-    let art = artifacts_dir(cli.artifacts.as_deref(), &dir, here);
-    Ok(Some((dir, art)))
-}
-
-/// What saying yes does, step by step: the warning before the one question. Until it is told
-/// where (`places`), it says that it must be.
-fn plan(cli: &Cli, here: &Path, places: Option<&(PathBuf, PathBuf)>) -> Vec<String> {
-    let Some((dir, art)) = places else {
-        let user = install_dir(Mode::User, here)
-            .map(|dir| dir.display().to_string())
-            .unwrap_or_else(|problem| problem);
-        return vec![
-            "Say where to install Nacht des Schreckens, here after the y or on the command line:"
-                .to_string(),
-            format!("  --locally    in place, in {}", here.display()),
-            format!("  --user-wide  for you only, in {user}"),
-            "One of them is needed: without it, nothing is done.".to_string(),
-        ];
-    };
-    let mode = mode(cli);
+/// The plan's lines for nacht's parts, under the warning before the one question.
+fn plan(cli: &Cli, places: &Places) -> Vec<String> {
     let mut lines = vec![
-        "Saying yes will:".to_string(),
         format!(
-            "  - install Nacht des Schreckens in {}{}: horde-hammer.pk3 and nacht.pk3, the payload, in its wads/, and {INI} (nacht's controls, the profiles' ini)",
-            dir.display(),
-            ""
+            "  - puts horde-hammer.pk3 and nacht.pk3, the payload, in {}, and {INI} (nacht's controls, the profiles' ini) in {}",
+            places.dir.join("wads").display(),
+            places.dir.display()
         ),
-        format!(
-            "  - put everything else, its artifacts, in {}: doomify's settings (the weapons' TOMLs, yours to rewrite; a newer install-nacht's replace them), the built weapons, the loadout and its log",
-            art.display()
-        ),
+        "  - puts doomify's settings in the artifacts (the weapons' TOMLs, yours to rewrite; a newer install-nacht's replace them), with the built weapons and the loadout".into(),
     ];
-    if !cli.no_tdl {
-        let downloads: Vec<&str> = [("UZDoom", cli.no_uzdoom), ("Freedoom 2", cli.no_freedoom)]
+    if cli.tdl {
+        let downloads: Vec<&str> = [("UZDoom", cli.uzdoom), ("Freedoom 2", cli.freedoom)]
             .into_iter()
-            .filter_map(|(name, left_out)| (!left_out).then_some(name))
+            .filter_map(|(name, wanted)| wanted.then_some(name))
             .collect();
         lines.push(format!(
-            "  - run install-tdl, which puts tdl in the artifacts{}{}",
-            if mode == Some(Mode::InPlace) {
-                ""
-            } else {
-                " with the tdl command on the PATH"
+            "  - runs install-tdl, which puts tdl in the artifacts{}{}",
+            match places.mode {
+                Mode::InPlace => "",
+                Mode::User => " with the tdl command on the PATH",
             },
             if downloads.is_empty() {
                 String::new()
@@ -403,188 +282,100 @@ fn plan(cli: &Cli, here: &Path, places: Option<&(PathBuf, PathBuf)>) -> Vec<Stri
             }
         ));
     }
-    match &cli.blender {
-        Some(blender) => lines.push(format!("  - render with the Blender at {}", blender.display())),
-        None if !cli.no_blender => lines.push(
-            "  - download Blender 4.2.9 LTS into the artifacts, checked against its hash, if no Blender 4.0 or newer is installed"
+    match &cli.blender_path {
+        Some(blender) => lines.push(format!("  - renders with the Blender at {}", blender.display())),
+        None if cli.blender => lines.push(
+            "  - downloads Blender 4.2.9 LTS into the artifacts, checked against its hash, if no Blender 4.0 or newer is installed"
                 .into(),
         ),
         None => {}
     }
-    let steps = journal::Steps::open(art, cli.reinstall);
-    if !cli.no_song && !steps.done("song") {
+    let steps = journal::Steps::open(&places.artifacts, cli.reinstall);
+    if cli.song && !steps.done("song") {
         lines.push(format!("  - {}", SONG.warning));
     }
-    if !cli.no_song && !steps.done("songs") {
+    if cli.song && !steps.done("songs") {
         for song in SONGS.iter().filter(|song| song.title != SONG.title) {
             lines.push(format!("  - {}", song.warning));
         }
     }
-    if !cli.no_doomify && cli.rerender {
+    if cli.doomify && cli.rerender {
         lines.push(
-            "  - pull and render every weapon again from World at War (--rerender), though they are built and in the cache: an hour or more"
+            "  - pulls and renders every weapon again from World at War (--rerender), though they are built and in the cache: an hour or more"
                 .into(),
         );
     }
-    if !cli.no_doomify {
+    if cli.doomify {
         lines.push(
-            "  - rebuild the weapons from your game with doomify, if World at War is running or everything is in doomify's cache (about an hour the first time), into wads/nacht-waw.pk3"
+            "  - rebuilds the weapons from your game with doomify, if World at War is running or everything is in doomify's cache (about an hour the first time), into wads/nacht-waw.pk3"
                 .into(),
         );
     }
-    if cli.desktop_shortcut {
-        lines.push(
-            "  - make a shortcut on your desktop that opens tdl on the install's loadout".into(),
-        );
-    }
-    if cli.menu_entry {
-        lines.push(
-            "  - make an entry in your app menu that opens tdl on the install's loadout".into(),
-        );
+    if let Some(waw) = &cli.waw {
+        lines.push(format!("  - looks for World at War in {}", waw.display()));
     }
     if cli.command {
         lines.push(format!(
-            "  - make nacht a command in your terminal, which opens tdl on the install's loadout ({})",
+            "  - makes nacht a command in your terminal, which opens tdl on the install's loadout ({})",
             command_place()
         ));
     }
     lines.push(format!(
-        "  - set up the install's loadout{}",
-        if cli.no_play {
-            ""
-        } else {
-            " and open tdl on it"
-        }
+        "  - sets up the install's loadout{}",
+        if cli.play { " and opens tdl on it" } else { "" }
     ));
-    let earlier: Vec<&str> = steps
-        .earlier()
-        .into_iter()
-        .filter(|step| {
-            !step.starts_with("profile ")
-                && !step.starts_with("install-tdl")
-                && !step.starts_with("weapons ")
-                && !step.starts_with("settings ")
-        })
-        // a step marked with what it was done with (`tdl <mark>`) by its name alone
-        .map(|step| step.split(' ').next().unwrap_or(step))
-        .collect();
-    if !earlier.is_empty() {
-        lines.push(format!(
-            "  - skip what an earlier run finished ({}), picking up where it left off (--reinstall does it all again)",
-            earlier.join(", ")
-        ));
-    }
-    lines.push(String::new());
-    lines.push(
-        "To change that, here or after the y: --locally or --user-wide, --dir and --artifacts say where, --no-tdl, --no-uzdoom, --no-freedoom, --no-blender, --no-song, --no-doomify and --no-play leave those out, --reinstall does everything again, --rerender renders every weapon again, --waw DIR and --blender PATH say where World at War and Blender are, --desktop-shortcut and --menu-entry make shortcuts, --command makes the nacht command, and --computer-speak speaks plainly."
-            .into(),
-    );
     lines
 }
 
-fn run(mut cli: Cli) -> Outcome<()> {
-    let here = match &cli.from {
-        Some(from) => from
-            .canonicalize()
-            .or_else(|_| std::path::absolute(from))
-            .unwrap_or_else(|_| from.clone()),
-        None => program_dir().ok_or("Couldn't tell where this program is")?,
-    };
-    let mut chosen = places(&cli, &here)?;
-    // ❓ the one question, after what saying yes does; flags given with the y win
-    journal::warning(&plan(&cli, &here, chosen.as_ref()));
-    let flags: Vec<String> = Cli::command()
-        .get_arguments()
-        .filter_map(|argument| argument.get_long())
-        .filter(|long| *long != "accept")
-        .map(|long| format!("--{long}"))
-        .collect();
-    let flags: Vec<&str> = flags.iter().map(String::as_str).collect();
-    match journal::confirm(cli.accept, &flags) {
-        None => {
-            journal::declined();
-            return Err("nothing was done".into());
-        }
-        Some(added) if !added.is_empty() => {
-            note!("with the flags given at the question: {}", added.join(" "));
-            cli = Cli::parse_from(std::env::args_os().chain(added.into_iter().map(Into::into)));
-            chosen = places(&cli, &here)?;
-        }
-        Some(_) => {}
-    }
-    // 📍 never a guess at where: --locally or --user-wide, from the command line or the answer
-    let (Some(mode), Some((dir, art))) = (mode(&cli), chosen) else {
-        return Err(
-            "Nothing was done: say where to install it, with --locally or --user-wide".into(),
-        );
-    };
-    let cli = &cli;
-    refuse_root()?;
-    for pk3 in PK3S {
-        if !here.join(pk3).is_file() {
-            return Err(format!(
-                "{pk3} isn't next to this program, in {}: run it from the published folder",
-                here.display()
-            ));
-        }
-    }
-    fs::create_dir_all(&dir).map_err(|error| format!("{}: {error}", dir.display()))?;
-    fs::create_dir_all(&art).map_err(|error| format!("{}: {error}", art.display()))?;
-    // 📓 from here on the journal is kept with the artifacts
-    journal::open(&art, "install.log");
-    journal::tell(
-        "begin",
-        &[
-            ("what", "Nacht des Schreckens"),
-            ("place", &dir.display().to_string()),
-        ],
-        &format!("Installing Nacht des Schreckens in {}", dir.display()),
-    );
-    note!("this program is in {}", here.display());
+/// Everything after what the library did (the question, the folders, the journal and its
+/// beginning): tdl, the pk3s, doomify's settings, Blender, the weapons, the songs and the loadout.
+fn install(location: &Location, cli: &Cli) -> Outcome<()> {
+    let (here, dir, art) = (&location.here, &location.dir, &location.places.artifacts);
+    let mode = location.mode;
     note!(
-        "mode {mode:?}; leaving out: tdl {}, uzdoom {}, freedoom {}, blender {}, doomify {}",
-        cli.no_tdl,
-        cli.no_uzdoom,
-        cli.no_freedoom,
-        cli.no_blender,
-        cli.no_doomify,
+        "leaving out: tdl {}, uzdoom {}, freedoom {}, blender {}, doomify {}",
+        !cli.tdl,
+        !cli.uzdoom,
+        !cli.freedoom,
+        !cli.blender,
+        !cli.doomify,
     );
 
-    let mut steps = journal::Steps::open(&art, cli.reinstall);
+    let mut steps = journal::Steps::open(art, cli.reinstall);
     let scratch = Scratch::new();
     let tdl_name = if cfg!(windows) { "tdl.exe" } else { "tdl" };
     // 🔁 done again when the tdl it would take (beside this, or the workspace's release) is
     // another than the one it took, so a newer tdl reaches an install
     let local: Vec<PathBuf> = ["tdl", "install-tdl"]
         .iter()
-        .filter_map(|name| beside(&here, name).or_else(|| from_workspace(&here, "tdl", name)))
+        .filter_map(|name| beside(here, name).or_else(|| from_workspace(here, "tdl", name)))
         .collect();
     let tdl_step = if local.is_empty() {
         "tdl".to_string()
     } else {
         format!("tdl {}", fingerprint(&local))
     };
-    if !cli.no_tdl {
+    if !!cli.tdl {
         if steps.done(&tdl_step) && art.join(tdl_name).is_file() {
             steps.skip("tdl", &art.display().to_string());
         } else {
             // the install's loadout first, so tdl's own setup (its Freedoom profile) goes in it too
-            merge_setup(&art, |table| {
-                set_loadout(table, &art, mode == Mode::InPlace)
+            merge_setup(art, |table| {
+                set_loadout(table, art, mode == Mode::InPlace)
             })?;
-            install_tdl(&here, &art, mode, cli, &scratch)?;
+            install_tdl(here, art, mode, cli, &scratch)?;
             steps.finish(&tdl_step);
         }
     }
     journal::section("install");
-    place_files(&here, &dir)?;
-    place_ini(&dir, cli.reinstall)?;
+    place_files(here, dir)?;
+    place_ini(dir, cli.reinstall)?;
     let settings = art.join(DOOMIFY);
     place_settings(&settings, &mut steps)?;
-    let blender = match &cli.blender {
+    let blender = match &cli.blender_path {
         Some(path) => Some(path.clone()),
-        None if cli.no_blender => find_blender(&art),
-        None => ensure_blender(&art)?,
+        None if !cli.blender => find_blender(art),
+        None => ensure_blender(art)?,
     };
     note!("blender: {:?}", blender);
     let built = dir.join("wads").join("nacht-waw.pk3");
@@ -592,13 +383,13 @@ fn run(mut cli: Cli) -> Outcome<()> {
     // keeps what they didn't touch: only what a changed part of its render script draws, or a
     // rewritten TOML, is rendered again)
     let weapons = format!("weapons {}", weapons_mark(&settings));
-    if !cli.no_doomify && !cli.rerender && steps.done(&weapons) && built.is_file() {
+    if !!cli.doomify && !cli.rerender && steps.done(&weapons) && built.is_file() {
         journal::section("weapons");
         steps.skip("nacht-waw.pk3", &built.display().to_string());
-    } else if !cli.no_doomify
+    } else if !!cli.doomify
         && build_weapons(
-            &here,
-            &art,
+            here,
+            art,
             &settings,
             &built,
             blender.as_deref(),
@@ -609,7 +400,7 @@ fn run(mut cli: Cli) -> Outcome<()> {
     }
     // 🎵 World at War's songs are pulled once for tdl to know, and nacht's is made tdl's song once:
     // a song picked since then is left alone
-    let (song, songs) = if cli.no_song {
+    let (song, songs) = if !cli.song {
         (None, Vec::new())
     } else {
         journal::section("song");
@@ -627,7 +418,7 @@ fn run(mut cli: Cli) -> Outcome<()> {
             .iter()
             .filter(|song| know || (make_song && song.title == SONG.title))
             .collect();
-        let pulled = pull_songs(&wanted, &art, cli.waw.as_deref());
+        let pulled = pull_songs(&wanted, art, cli.waw.as_deref());
         let song = pulled
             .iter()
             .find(|(song, _)| make_song && song.title == SONG.title)
@@ -640,8 +431,8 @@ fn run(mut cli: Cli) -> Outcome<()> {
         (song, songs)
     };
     let tdl = set_up_loadout(
-        &dir,
-        &art,
+        dir,
+        art,
         song.as_deref(),
         &songs,
         mode == Mode::InPlace,
@@ -663,7 +454,7 @@ fn run(mut cli: Cli) -> Outcome<()> {
             cli.menu_entry,
         );
         if cli.command {
-            match make_command(&art, &command) {
+            match make_command(art, &command) {
                 Ok(told) => journal::tell(
                     "copy",
                     &[("what", "The nacht command"), ("place", &command_place())],
@@ -673,9 +464,9 @@ fn run(mut cli: Cli) -> Outcome<()> {
             }
         }
     }
-    journal::finish("Nacht des Schreckens");
     if let Some(tdl) = tdl {
-        play(&tdl, &dir, &art, cli.no_play);
+        let (dir, art, play) = (dir.clone(), art.clone(), cli.play);
+        installation_groans::then(move || self::play(&tdl, &dir, &art, !play));
     }
     Ok(())
 }
@@ -1300,54 +1091,43 @@ fn from_workspace(here: &Path, project: &str, name: &str) -> Option<PathBuf> {
     path.is_file().then_some(path)
 }
 
-/// Runs the `install-tdl` that puts tdl, UZDoom and Freedoom 2 in `dir`. It and tdl are staged
-/// side by side first, since install-tdl copies the tdl it finds beside itself.
+/// Runs the `install-tdl` that puts tdl, UZDoom and Freedoom 2 in `dir` (the artifacts, which
+/// all install-tdl makes goes in too). It and tdl are staged side by side first, and install-tdl
+/// installs the tdl beside it (`--from`).
 fn install_tdl(here: &Path, dir: &Path, mode: Mode, cli: &Cli, scratch: &Scratch) -> Outcome<()> {
     let stage = scratch.dir()?.join("tools");
     let installer = stage.join(asset("install-tdl"));
     let tdl = stage.join(asset("tdl"));
     get_tool(here, "install-tdl", TDL_REPOSITORY, &installer, scratch)?;
     get_tool(here, "tdl", TDL_REPOSITORY, &tdl, scratch)?;
-    if mode == Mode::InPlace {
-        // 🧱 in place there is no copying: tdl is simply put where it will live
-        copy_whole(
-            &tdl,
-            &dir.join(if cfg!(windows) { "tdl.exe" } else { "tdl" }),
-        )?;
-        make_executable(&dir.join(if cfg!(windows) { "tdl.exe" } else { "tdl" }))?;
-    }
     journal::section("download");
-    note!(
-        "running {} --mode {} --dir {}",
-        installer.display(),
-        mode.flag(),
-        dir.display()
-    );
     let mut command = Command::new(&installer);
     // 📦 the installer is its own AppImage, if it is one
     command.env_remove("APPIMAGE");
-    // 🗃️ tdl is an artifact here, and so is all install-tdl makes beside it
+    // 🗃️ tdl is an artifact here, and so is all install-tdl makes beside it; it speaks for itself,
+    // in this one's voice and journal, and opens nothing (the loadout is nacht's to open)
     journal::child(&mut command, true);
     command
         .arg("--accept")
-        .arg("--mode")
         .arg(mode.flag())
+        .arg("--from")
+        .arg(&stage)
         .arg("--dir")
         .arg(dir)
         .arg("--artifacts")
-        .arg(dir);
-    if cli.computer_speak {
-        command.arg("--computer-speak");
+        .arg(dir)
+        .arg("--no-play");
+    for (flag, on) in [
+        ("--computer-speak", cli.computer_speak),
+        ("--no-uzdoom", !cli.uzdoom),
+        ("--no-freedoom", !cli.freedoom),
+        ("--reinstall", cli.reinstall),
+    ] {
+        if on {
+            command.arg(flag);
+        }
     }
-    if cli.no_uzdoom {
-        command.arg("--no-uzdoom");
-    }
-    if cli.reinstall {
-        command.arg("--reinstall");
-    }
-    if cli.no_freedoom {
-        command.arg("--no-freedoom");
-    }
+    note!("running {command:?}");
     let status = command
         .status()
         .map_err(|error| format!("couldn't run {}: {error}", installer.display()))?;
@@ -1707,26 +1487,6 @@ fn world_at_war_running() -> bool {
         })
 }
 
-/// Where everything but the pk3s goes: `given`, or, when this runs in place from a project's
-/// `published/releases/`, that project's `published/artifacts/`, or else `<dir>/artifacts/`.
-fn artifacts_dir(given: Option<&Path>, dir: &Path, here: &Path) -> PathBuf {
-    if let Some(given) = given {
-        return std::path::absolute(given).unwrap_or_else(|_| given.to_path_buf());
-    }
-    match here.parent() {
-        Some(published)
-            if dir == here
-                && here.file_name().is_some_and(|name| name == "releases")
-                && published
-                    .file_name()
-                    .is_some_and(|name| name == "published") =>
-        {
-            published.join("artifacts")
-        }
-        _ => dir.join("artifacts"),
-    }
-}
-
 /// Where the `nacht` command is put: `~/.local/bin`, or on Windows a `bin` folder of its own in
 /// the artifacts, put on the user's PATH.
 fn command_place() -> String {
@@ -1837,37 +1597,6 @@ fn make_command(art: &Path, command: &[String]) -> Outcome<String> {
         }
         Ok(told)
     }
-}
-
-/// The folder nacht is installed to in `mode`; `here` is where this program is.
-fn install_dir(mode: Mode, here: &Path) -> Outcome<PathBuf> {
-    let var = |name: &str| {
-        std::env::var_os(name)
-            .map(PathBuf::from)
-            .filter(|path| !path.as_os_str().is_empty())
-            .ok_or_else(|| format!("${name} isn't set; pass --dir"))
-    };
-    Ok(match (mode, cfg!(windows)) {
-        (Mode::InPlace, _) => here.to_path_buf(),
-        (Mode::User, true) => var("LOCALAPPDATA")?.join("Programs").join(NAME),
-        (Mode::User, false) => var("HOME")?.join(".local").join("opt").join(NAME),
-    })
-}
-
-/// Nacht is installed for whoever runs this, or in place: never as root, whose install nobody else
-/// could use or change (World at War, tdl's settings and the song would all be root's).
-fn refuse_root() -> Outcome<()> {
-    #[cfg(not(windows))]
-    {
-        let root = Command::new("id")
-            .arg("-u")
-            .output()
-            .is_ok_and(|output| output.stdout.trim_ascii() == b"0");
-        if root {
-            return Err("Don't run install-nacht as root (with sudo): it installs Nacht des Schreckens for you, or in place, and needs no root".into());
-        }
-    }
-    Ok(())
 }
 
 /// Downloads `download` into the scratch folder from the first of its URLs that works, checking
