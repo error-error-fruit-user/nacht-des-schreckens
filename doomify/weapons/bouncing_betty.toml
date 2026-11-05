@@ -7,7 +7,7 @@ sprite = "BB"
 kind = "mine"
 slot = 8
 box_weight = 1
-wall = { cost = 1000, chalk = "bouncing_betty_chalk_c" }
+wall = { cost = 1000, chalk = "bouncing_betty_chalk_c", scale = 0.25 }
 
 [game]
 weapon = "mine_bouncing_betty"

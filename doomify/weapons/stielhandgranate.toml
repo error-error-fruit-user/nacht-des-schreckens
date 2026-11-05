@@ -7,7 +7,7 @@ sprite = "SG"
 kind = "grenade"
 slot = 8
 box_weight = 1
-wall = { cost = 250, chalk = "grenade_bag_chalk_c" }
+wall = { cost = 250, chalk = "grenade_bag_chalk_c", scale = 0.25 }
 
 [game]
 weapon = "stielhandgranate"

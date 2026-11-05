@@ -18,7 +18,7 @@ The zombies mode itself is [Horde Hammer](https://github.com/error-error-fruit-u
 
 Nacht des Schreckens runs on [UZDoom](https://github.com/UZDoom/UZDoom) 5 or newer, and needs [Horde Hammer](https://github.com/error-error-fruit-user/horde-hammer), loaded before it, and **World at War's weapons, which you make from your own copy of the game** before you play for the first time.
 
-They aren't in this repository, because World at War's assets can't be shared. `install-nacht` rebuilds them while it installs, with [Doomify WaW](https://github.com/error-error-fruit-user/doomify-waw)'s library built into it, from **Call of Duty: World at War** (Steam) while it runs: every weapon of Der Riese (the M1911 to the Wunderwaffe DG-2, their Pack-a-Punched versions, the Stielhandgranate, Bouncing Betty, cymbal monkey and Bowie knife), the perk bottles and their drinking, their wall drawings and sounds, and the zombies' voices, into `nacht-waw.pk3`. The perk machines are nacht's own. It needs [Blender](https://www.blender.org) 4.0 or newer, which renders the weapons, and takes about an hour the first time:
+They aren't in this repository, because World at War's assets can't be shared. `install-nacht` rebuilds them while it installs, with [Doomify WaW](https://github.com/error-error-fruit-user/doomify-waw)'s library built into it, from **Call of Duty: World at War** (Steam) while it runs: every weapon of Der Riese (the M1911 to the Wunderwaffe DG-2, their Pack-a-Punched versions, the Stielhandgranate, Bouncing Betty, cymbal monkey and Bowie knife, and World at War's molotov cocktail), the perk bottles and their drinking, their wall drawings and sounds, and the zombies' voices, into `nacht-waw.pk3`. The perk machines are nacht's own. It needs [Blender](https://www.blender.org) 4.0 or newer, which renders the weapons, and takes about an hour the first time:
 
 1. Start World at War and, in Zombies, play Der Riese solo. Stay in the map.
 2. Run `install-nacht` (or, in this checkout, `python3 publish-install.py`).
@@ -53,7 +53,7 @@ To play against Doom's own monsters instead of the zombies, set 'Zombies' to 'Ro
 |Reload|R Key|X Button|
 |Zoom|Right Click|Left Trigger|
 |Kick (a stab, once you own the Bowie knife)|F Key|Right Stick Click|
-|Equipment (monkey, Betty, Bowie knife, grenades)|G Key||
+|Equipment (monkey, Betty, molotovs, Bowie knife, grenades)|G Key||
 |Swap Weapon|Mouse Wheel|Y Button|
 |Quick Swap|1-9 Keys|D-Pad: Up first weapon, Right second, Left third|
 |Drop Weapon|C Key x2|Right Bumper x2|
@@ -72,7 +72,7 @@ Host or join with tdl: the host serves the profile's files, and joiners download
 
 ### Base games
 
-- **id Software's [Doom + Doom II](https://store.steampowered.com/app/2280/DOOM__DOOM_II/)**: the IWAD the mod runs on. Nacht ships no textures of its own, so every wall, floor and ceiling on the map is a Doom 2 texture (`GRAY5`, `ROCK3`, `RROCK03`, `BROWNHUG`, `FLAT5_4`, `FLAT1`, ...), and so is the sky. The fires on the crashed plane loop the Arch-vile's flame frames (`FIRE`). The Doom marine player class keeps Doom's weapons, and the 'Rogues gallery' option sends Doom's monsters instead of the zombies.
+- **id Software's [Doom + Doom II](https://store.steampowered.com/app/2280/DOOM__DOOM_II/)**: the IWAD the mod runs on. Nacht ships no textures of its own, so every wall, floor and ceiling on the map is a Doom 2 texture (`GRAY5`, `ROCK3`, `RROCK03`, `BROWNHUG`, `FLAT5_4`, `FLAT1`, ...), and so is the sky. The fires on the crashed plane, and those of the flamethrower, molotovs and Porter's X2, loop the Arch-vile's flame frames (`FIRE`). The Doom marine player class keeps Doom's weapons, and the 'Rogues gallery' option sends Doom's monsters instead of the zombies.
 - **[Freedoom](https://freedoom.github.io/)**: the free IWAD the mod also runs on, in place of Doom 2.
 - **Treyarch's [Call of Duty: World at War](https://store.steampowered.com/app/10090/Call_of_Duty_World_at_War/)**: the map remade, and the source of most of nacht's art:
     - Der Riese's weapons, perk bottles and drinking, their wall drawings and sounds and the zombies' voices, rebuilt by `install-nacht` from your own copy of the game ([Doomify WaW](https://github.com/error-error-fruit-user/doomify-waw), with [Hell Hound](https://github.com/error-error-fruit-user/hell-hound) reading the game and Blender rendering it). None of it is in this repository.
