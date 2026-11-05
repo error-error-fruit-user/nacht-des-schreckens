@@ -5,3 +5,6 @@ NACHT_INTRO_BOTTOM = "Zombies";
 NACHT_MENU_ZOMBIES = "Zombies";
 NACHT_MENU_ZOMBIES_NACHT = "Nacht's zombies";
 NACHT_MENU_ZOMBIES_ROGUES = "Rogues gallery";
+NACHT_MENU_WALLS = "Wall weapons";
+NACHT_MENU_WALLS_WAW = "World at War's";
+NACHT_MENU_WALLS_DOOM = "Doom's";

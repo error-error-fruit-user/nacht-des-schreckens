@@ -1,17 +1,25 @@
-// Nacht's own option; everything else is in Horde Hammer's options
+// Nacht's own options; everything else is in Horde Hammer's options
 
 OptionValue "Nacht_Zombies" {
     0, "$NACHT_MENU_ZOMBIES_NACHT"
     1, "$NACHT_MENU_ZOMBIES_ROGUES"
 }
 
+// World at War's drawings need nacht-waw; without it the walls are always Doom's
+OptionValue "Nacht_Walls" {
+    0, "$NACHT_MENU_WALLS_WAW"
+    1, "$NACHT_MENU_WALLS_DOOM"
+}
+
 AddOptionMenu "OptionsMenu" {
     Option "$NACHT_MENU_ZOMBIES", "nacht_rogues_gallery", "Nacht_Zombies"
+    Option "$NACHT_MENU_WALLS", "nacht_doom_walls", "Nacht_Walls"
 }
 
 // and the simple options menu, which UZDoom shows instead while m_simpleoptions is on
 AddOptionMenu "OptionsMenuSimple" {
     Option "$NACHT_MENU_ZOMBIES", "nacht_rogues_gallery", "Nacht_Zombies"
+    Option "$NACHT_MENU_WALLS", "nacht_doom_walls", "Nacht_Walls"
 }
 
 // Nacht's theme: the menus in its blood red and bone (TEXTCOLO.txt), a drop of blood for the

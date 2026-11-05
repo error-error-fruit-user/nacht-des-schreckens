@@ -17,11 +17,12 @@ skill Normal {
 }
 
 // Horde Hammer adds its own event handlers and editor numbers (27000-27099); the generated
-// nacht-waw adds the weapons' (the wall drawings, 1050-1070) and the player class, Nacht_Player
-// (World at War's start items). Without it the marine is Doom's (Nacht des Platzhalters).
+// nacht-waw adds the weapons' (the wall drawings, 1050-1070, over Doom's below) and the player
+// class, Nacht_Player (World at War's start items). Without it the marine is Doom's (Nacht des
+// Platzhalters).
 GameInfo {
     StatusBarClass = "HH_Hud"
-    AddEventHandlers = "Nacht_IntroHandler", "Nacht_WorldAtWar"  // the intro's title (the intro itself is ACS, LOADACS.txt); the note that nacht-waw isn't loaded
+    AddEventHandlers = "Nacht_IntroHandler", "Nacht_WorldAtWar"  // the intro's title (the intro itself is ACS, LOADACS.txt); the note that nacht-waw isn't loaded, and Doom's walls in place of its
 
     // the theme (tools/theme.py draws its pictures, TEXTCOLO.txt has its colours)
     TitlePage = "TITLEPIC"
@@ -51,4 +52,28 @@ DoomEdNums {
     1015 = "Nacht_Zombie"
     1016 = "Nacht_Plane"
     1017 = "Nacht_PlaneFire"
+
+    // The wall drawings' spots: Doom's weapons in chalk (walls.zs) until nacht-waw, loaded after,
+    // gives them World at War's
+    1050 = "Nacht_ShotgunDrawing"           // the Kar98k's
+    1051 = "Nacht_SuperShotgunDrawing"      // the M1 Carbine's
+    1052 = "Nacht_ChaingunDrawing"          // the Thompson's
+    1053 = "Nacht_BareWall"
+    1054 = "Nacht_BareWall"
+    1055 = "Nacht_BareWall"
+    1056 = "Nacht_BareWall"
+    1057 = "Nacht_BareWall"
+    1058 = "Nacht_BareWall"
+    1059 = "Nacht_BareWall"
+    1060 = "Nacht_SuperShotgunDrawing"      // the MP40's
+    1061 = "Nacht_BareWall"
+    1062 = "Nacht_BareWall"
+    1063 = "Nacht_BareWall"
+    1064 = "Nacht_BareWall"
+    1065 = "Nacht_BareWall"
+    1066 = "Nacht_BareWall"
+    1067 = "Nacht_BareWall"
+    1068 = "Nacht_BareWall"
+    1069 = "Nacht_BareWall"
+    1070 = "Nacht_BareWall"
 }

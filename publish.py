@@ -77,7 +77,7 @@ import appimage  # noqa: E402
 PACKAGE = "nacht"
 NAME = "nacht.pk3"
 # Copied next to the pk3 and into it under licenses/
-LICENSES = ["LICENSE-weather"]
+LICENSES = ["LICENSE-weather", "LICENSE-freedoom"]
 
 OUT = os.path.join("published", "releases")
 # The library nacht runs on, packed alongside it when its repository is here

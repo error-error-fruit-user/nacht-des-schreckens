@@ -1,3 +1,4 @@
 // Nacht's own settings (Horde Hammer's are in its CVARINFO)
 
 server bool nacht_rogues_gallery = false;   // Doom's monsters instead of nacht's zombies (from the next map start)
+server bool nacht_doom_walls = false;      // Doom's weapons in chalk on the walls instead of World at War's (from the next map start)
